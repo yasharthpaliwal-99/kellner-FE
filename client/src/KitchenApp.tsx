@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import type { KitchenStats, Order } from "./types";
+import { apiUrl } from "./lib/api";
 import { getAuthSession } from "./lib/authSession";
 import { Nav } from "./components/Nav";
 import { HomeView } from "./components/HomeView";
@@ -68,7 +69,7 @@ export default function KitchenApp() {
     const params = new URLSearchParams({ hotel_id: hid });
     const d = getKitchenDateQuery();
     if (d) params.set("date", d);
-    const r = await fetch(`/api/kitchen?${params.toString()}`);
+    const r = await fetch(apiUrl(`/api/kitchen?${params.toString()}`));
     await assertOk(r, "Could not load kitchen");
     const data = await r.json();
     setOrders(data.orders ?? []);
@@ -102,7 +103,7 @@ export default function KitchenApp() {
   }, [refresh]);
 
   const updateStatus = async (orderId: string, status: string) => {
-    const r = await fetch(`/api/orders/${orderId}/status`, {
+    const r = await fetch(apiUrl(`/api/orders/${orderId}/status`), {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status }),

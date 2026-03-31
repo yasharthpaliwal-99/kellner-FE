@@ -34,9 +34,20 @@ Create `client/.env` as needed.
 
 Important keys:
 
-- `VITE_KELLNER_API_PORT` (optional, default `8000`)
-- `VITE_KELLNER_WS_URL` (optional override for direct WS URL)
+- **`VITE_API_BASE_URL`** — Base URL of the FastAPI server **without** a trailing slash (for example `http://74.249.2.119` or `https://api.example.com`). Required for **production static hosting** (Azure Static Web Apps, Netlify, S3, etc.): the dev-only Vite proxy does not run there, so relative `/api/...` calls would hit the static host and fail (often `405` or `404`). Set this in your CI/build pipeline so the bundled app calls your real API.
+- `VITE_KELLNER_API_PORT` (optional, default `8000`; used with local proxy when `VITE_API_BASE_URL` is unset)
+- `VITE_KELLNER_WS_URL` (optional override for WebSocket URL; if unset, derived from `VITE_API_BASE_URL` in production)
 - `VITE_HOTEL_ID` (optional fallback; kitchen now prefers logged-in session hotel)
+
+### HTTPS site + HTTP API
+
+If the frontend is served over **HTTPS** (typical on Azure) and `VITE_API_BASE_URL` is **http://…**, browsers block mixed content. Use an HTTPS API URL, or terminate TLS in front of your API (or put the API behind the same domain via a reverse proxy).
+
+### Azure Static Web Apps
+
+1. In **Application settings** (or your GitHub Actions workflow that runs `npm run build`), set `VITE_API_BASE_URL` to your Kellner API origin.
+2. Rebuild and redeploy so Vite inlines the value at build time.
+3. Ensure FastAPI allows **CORS** for your static app origin (`https://….azurestaticapps.net`).
 
 ## API Contracts Used
 

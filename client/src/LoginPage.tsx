@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { apiUrl } from "./lib/api";
 import { getSavedDeviceId, saveAuthSession, type AuthSession } from "./lib/authSession";
 import "./LoginPage.css";
 
@@ -53,7 +54,7 @@ export default function LoginPage() {
     }
     setSubmitting(true);
     try {
-      const r = await fetch("/api/device/login", {
+      const r = await fetch(apiUrl("/api/device/login"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -90,7 +91,7 @@ export default function LoginPage() {
     }
     setSubmitting(true);
     try {
-      const r = await fetch("/api/device/login", {
+      const r = await fetch(apiUrl("/api/device/login"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
