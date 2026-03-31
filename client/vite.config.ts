@@ -8,8 +8,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 /** FastAPI (uvicorn) — kitchen + voice; all `/api/*` on one port (default 8000). */
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, path.join(__dirname), "");
+  const baseUrl = env.VITE_API_BASE_URL?.trim();
   const port = env.VITE_KELLNER_API_PORT || "8000";
-  const target = `http://127.0.0.1:${port}`;
+  const target = baseUrl || `http://127.0.0.1:${port}`;
 
   return {
     plugins: [react()],
