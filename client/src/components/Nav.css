@@ -1,0 +1,31 @@
+.nav-pill {
+  display: inline-flex;
+  padding: 4px;
+  border-radius: 999px;
+  background: var(--gradient);
+  gap: 4px;
+  box-shadow: var(--shadow);
+}
+
+.nav-item {
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.92);
+  font-weight: 700;
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.55rem 1.35rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.nav-item:hover {
+  color: #fff;
+}
+
+.nav-item.active {
+  background: #ffffff;
+  color: var(--logo-black);
+}

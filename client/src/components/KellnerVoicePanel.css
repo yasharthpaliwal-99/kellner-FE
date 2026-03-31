@@ -1,0 +1,211 @@
+.kellner-voice-panel {
+  width: 100%;
+  max-width: 42rem;
+  margin: 0 auto;
+  padding: 0 1.25rem 2rem;
+}
+
+.kellner-voice-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.35rem;
+}
+
+.kellner-voice-title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #1e1b4b;
+}
+
+.kellner-voice-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: #ef4444;
+  flex-shrink: 0;
+}
+
+.kellner-voice-dot.on {
+  background: #22c55e;
+}
+
+.kellner-voice-url {
+  margin: 0 0 0.5rem;
+  font-size: 0.68rem;
+  color: #64748b;
+  word-break: break-all;
+}
+
+.kellner-voice-url code {
+  background: rgba(0, 0, 0, 0.05);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+}
+
+.kellner-voice-status {
+  margin: 0 0 0.65rem;
+  font-size: 0.85rem;
+  color: #475569;
+  min-height: 1.25rem;
+}
+
+.kellner-live-transcript {
+  margin-bottom: 0.85rem;
+  padding: 0.85rem 1rem;
+  border-radius: 12px;
+  background: rgba(79, 70, 229, 0.08);
+  border: 1px solid rgba(79, 70, 229, 0.22);
+  min-height: 3.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.kellner-live-label {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: #4f46e5;
+}
+
+.kellner-live-text {
+  font-size: 1.1rem;
+  line-height: 1.45;
+  font-weight: 500;
+  color: #0f172a;
+  word-break: break-word;
+}
+
+.kellner-live-placeholder {
+  font-size: 0.9rem;
+  color: #94a3b8;
+  font-style: italic;
+}
+
+.kellner-voice-conv {
+  max-height: 260px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0.75rem;
+  border-radius: 12px;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  background: rgba(255, 255, 255, 0.7);
+  margin-bottom: 0.75rem;
+}
+
+.kellner-voice-bubble {
+  max-width: 88%;
+  padding: 0.5rem 0.75rem;
+  border-radius: 12px;
+  font-size: 0.88rem;
+  line-height: 1.45;
+}
+
+.kellner-voice-bubble.user {
+  align-self: flex-end;
+  background: linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%);
+  color: #fff;
+}
+
+.kellner-voice-bubble.assistant {
+  align-self: flex-start;
+  background: #f1f5f9;
+  color: #0f172a;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+}
+
+.kellner-voice-bubble.assistant.streaming {
+  font-style: italic;
+  color: #64748b;
+}
+
+.kellner-voice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.kellner-voice-start {
+  border: none;
+  border-radius: 999px;
+  padding: 0.55rem 1.25rem;
+  font-weight: 600;
+  font-size: 0.88rem;
+  cursor: pointer;
+  background: #0f172a;
+  color: #fff;
+}
+
+.kellner-voice-start:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* —— Guest: voice only — no transcript / conversation on screen —— */
+.kellner-voice-panel--guest {
+  padding: 0;
+  margin: 0 auto;
+  width: 100%;
+  max-width: 26rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+}
+
+.kellner-voice-actions--guest {
+  gap: 0.75rem;
+  justify-content: center;
+  margin-top: 0.25rem;
+}
+
+.kellner-voice-panel--guest .kellner-voice-start {
+  border-radius: 999px;
+  padding: 0.65rem 1.5rem;
+  font-size: 0.9rem;
+  background: var(--logo-black, #0a0a0a);
+  color: #fff;
+}
+
+.kellner-voice-mic {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  border: 1px solid var(--border-soft, rgba(0, 0, 0, 0.14));
+  border-radius: 999px;
+  padding: 0.55rem 1.15rem;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  background: var(--surface, #fff);
+  color: var(--text, #0a0a0a);
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.kellner-voice-mic:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.22);
+}
+
+.kellner-voice-mic:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.kellner-voice-mic.is-muted {
+  color: #b91c1c;
+  border-color: rgba(185, 28, 28, 0.35);
+  background: rgba(254, 242, 242, 0.9);
+}
+
+.kellner-voice-mic-svg {
+  flex-shrink: 0;
+}
+

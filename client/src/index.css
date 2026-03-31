@@ -1,0 +1,47 @@
+:root {
+  /* Match Kellner wordmark: solid black (#000) on white */
+  --logo-black: #0a0a0a;
+  --gradient: linear-gradient(to right, #0a0a0a, #2d2d2d);
+  --border: #1a1a1a;
+  --text: #0a0a0a;
+  --muted: #525252;
+  --surface: #ffffff;
+  --shadow: 0 10px 40px rgba(0, 0, 0, 0.08);
+  --border-soft: rgba(0, 0, 0, 0.14);
+  font-family: "DM Sans", system-ui, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color: var(--text);
+  background: #ffffff;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+#root {
+  min-height: 100vh;
+}
+
+button {
+  font-family: inherit;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}

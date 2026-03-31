@@ -1,0 +1,124 @@
+.app {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 1.25rem 1.25rem 2.5rem;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.25rem;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.brand-logo {
+  display: block;
+  width: auto;
+  max-width: min(28rem, 100%);
+  height: clamp(4.75rem, 12vw, 7.75rem);
+  object-fit: contain;
+  object-position: left center;
+}
+
+.brand-sub {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+  width: 100%;
+  flex-basis: 100%;
+  padding-left: 0;
+}
+
+@media (min-width: 520px) {
+  .brand {
+    flex-wrap: nowrap;
+    align-items: flex-end;
+  }
+
+  .brand-sub {
+    width: auto;
+    flex-basis: auto;
+    padding-left: 0;
+    margin-bottom: 0.15rem;
+  }
+}
+
+.btn-refresh {
+  border: 1px solid var(--border-soft);
+  background: var(--surface);
+  color: var(--logo-black);
+  font-weight: 600;
+  font-size: 0.85rem;
+  padding: 0.5rem 1rem;
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.btn-refresh:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.28);
+}
+
+.btn-refresh:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.main {
+  margin-top: 1.5rem;
+}
+
+.banner {
+  padding: 0.85rem 1rem;
+  border-radius: 12px;
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.banner-error {
+  background: #f4f4f5;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  color: #18181b;
+}
+
+.banner-hint {
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.banner-hint code {
+  font-size: 0.78rem;
+  background: rgba(0, 0, 0, 0.05);
+  padding: 0.1rem 0.35rem;
+  border-radius: 4px;
+}
+
+.staff-footer {
+  margin: 2rem 0 0;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-soft);
+  text-align: center;
+  font-size: 0.85rem;
+}
+
+.staff-footer a {
+  color: #4f46e5;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.staff-footer a:hover {
+  text-decoration: underline;
+}
