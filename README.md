@@ -34,9 +34,10 @@ Create `client/.env` as needed.
 
 Important keys:
 
-- **`VITE_API_BASE_URL`** — Base URL of the FastAPI server **without** a trailing slash (for example `http://74.249.2.119` or `https://api.example.com`). Required for **production static hosting** (Azure Static Web Apps, Netlify, S3, etc.): the dev-only Vite proxy does not run there, so relative `/api/...` calls would hit the static host and fail (often `405` or `404`). Set this in your CI/build pipeline so the bundled app calls your real API.
+- **`VITE_API_BASE_URL`** — Base URL of the FastAPI server **without** a trailing slash (for example `https://api.example.com`). Required for **production static hosting** (Azure Static Web Apps, Netlify, S3, etc.): the dev-only Vite proxy does not run there, so relative `/api/...` calls would hit the static host and fail (often `405` or `404`). Set this in your CI/build pipeline so the bundled app calls your real API.
 - `VITE_KELLNER_API_PORT` (optional, default `8000`; used with local proxy when `VITE_API_BASE_URL` is unset)
-- `VITE_KELLNER_WS_URL` (optional override for WebSocket URL; if unset, derived from `VITE_API_BASE_URL` in production)
+- `VITE_WS_BASE_URL` (optional WebSocket base, preferred; if unset, derived from `VITE_API_BASE_URL` in production)
+- `VITE_KELLNER_WS_URL` (legacy WebSocket override, still supported)
 - `VITE_HOTEL_ID` (optional fallback; kitchen now prefers logged-in session hotel)
 
 ### HTTPS site + HTTP API
