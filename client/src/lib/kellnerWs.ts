@@ -6,8 +6,8 @@ function httpToWs(httpUrl: string): string {
 
 /**
  * Kellner FastAPI WebSocket URL.
- * - Dev: same host as the page → Vite proxies `/api/ws` to uvicorn.
- * - Prod: set VITE_API_BASE_URL at build time, or set VITE_KELLNER_WS_URL explicitly.
+ * - Same-origin: no env — `wss?://<page host>/api/ws/conversation` (nginx + Vite proxy in dev).
+ * - Split hosts: set `VITE_WS_BASE_URL` or `VITE_KELLNER_WS_URL`, or derive from `VITE_API_BASE_URL`.
  */
 export function getKellnerWebSocketUrl(): string {
   const explicit =
@@ -32,11 +32,6 @@ export function getKellnerWebSocketUrl(): string {
     const base = httpToWs(http.toString());
     if (!sid) return base;
     return `${base}?session_id=${encodeURIComponent(sid)}`;
-  }
-  if (import.meta.env.PROD) {
-    throw new Error(
-      "Missing websocket base in production. Set VITE_WS_BASE_URL or VITE_API_BASE_URL."
-    );
   }
   const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
   const base = `${proto}//${window.location.host}/api/ws/conversation`;

@@ -30,25 +30,48 @@ npm run dev
 
 ## Environment
 
-Create `client/.env` as needed.
+Create `client/.env` for local dev if needed.
 
-Important keys:
+**VM + nginx (same host for UI and `/api`) — recommended:** do **not** set `VITE_API_BASE_URL` or WS overrides. The built app uses relative `/api/...` and same-origin WebSockets; nginx proxies to uvicorn.
 
-- **`VITE_API_BASE_URL`** — Base URL of the FastAPI server **without** a trailing slash (for example `https://api.example.com`). Required for **production static hosting** (Azure Static Web Apps, Netlify, S3, etc.): the dev-only Vite proxy does not run there, so relative `/api/...` calls would hit the static host and fail (often `405` or `404`). Set this in your CI/build pipeline so the bundled app calls your real API.
-- `VITE_KELLNER_API_PORT` (optional, default `8000`; used with local proxy when `VITE_API_BASE_URL` is unset)
-- `VITE_WS_BASE_URL` (optional WebSocket base, preferred; if unset, derived from `VITE_API_BASE_URL` in production)
-- `VITE_KELLNER_WS_URL` (legacy WebSocket override, still supported)
-- `VITE_HOTEL_ID` (optional fallback; kitchen now prefers logged-in session hotel)
+**Optional keys** (only if the UI and API are on different origins):
 
-### HTTPS site + HTTP API
+- `VITE_API_BASE_URL` — FastAPI origin, no trailing slash
+- `VITE_WS_BASE_URL` or `VITE_KELLNER_WS_URL` — WebSocket base if not derived from API URL
+- `VITE_KELLNER_API_PORT` — local dev only (Vite proxy target, default `8000`)
+- `VITE_HOTEL_ID` — optional kitchen fallback
 
-If the frontend is served over **HTTPS** (typical on Azure) and `VITE_API_BASE_URL` is **http://…**, browsers block mixed content. Use an HTTPS API URL, or terminate TLS in front of your API (or put the API behind the same domain via a reverse proxy).
+## Deploy on the VM (simple flow)
 
-### Azure Static Web Apps
+1. On the VM, create a directory and clone this repo (or only `client/` if you keep FE in a separate repo), e.g. `~/kellner-FE`.
+2. Point nginx `root` at `client/dist` and proxy `/api/` and `/api/ws/` to `127.0.0.1:8000` (see your backend team’s nginx snippet).
+3. After each frontend change: `git pull`, then from `client/`: `npm ci && npm run build`, then reload nginx if needed.
+4. No Azure or special build env required when UI and API share one hostname.
 
-1. In **Application settings** (or your GitHub Actions workflow that runs `npm run build`), set `VITE_API_BASE_URL` to your Kellner API origin.
-2. Rebuild and redeploy so Vite inlines the value at build time.
-3. Ensure FastAPI allows **CORS** for your static app origin (`https://….azurestaticapps.net`).
+### First-time setup on the VM (example)
+
+Replace user/host/paths with yours. Requires Node 20+ on the VM.
+
+```bash
+mkdir -p ~/kellner-FE && cd ~/kellner-FE
+git clone https://github.com/yasharthpaliwal-99/kellner-FE.git .
+cd client
+npm ci
+npm run build
+sudo mkdir -p /var/www/kellner
+sudo cp -r dist/* /var/www/kellner/
+# Configure nginx root=/var/www/kellner and proxy /api/ → 127.0.0.1:8000, then:
+sudo nginx -t && sudo systemctl reload nginx
+```
+
+### Update after a push to GitHub
+
+```bash
+cd ~/kellner-FE && git pull
+cd client && npm ci && npm run build
+sudo cp -r dist/* /var/www/kellner/
+sudo systemctl reload nginx
+```
 
 ## API Contracts Used
 
