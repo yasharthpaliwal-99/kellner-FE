@@ -13,14 +13,50 @@ Frontend for Kellner guest voice and kitchen staff experiences.
 
 ## Run Locally
 
-1. Start backend (FastAPI/Kellner) separately on your API host (default local: `127.0.0.1:8000`).
-2. Start frontend:
+The UI does **not** include the API. Vite proxies `/api/*` to **`http://127.0.0.1:8000`** by default. If nothing listens there, you will see **`ECONNREFUSED 127.0.0.1:8000`** and **`[vite] http proxy error`** for `/api/device/login` etc.
 
-```bash
-npm run dev
-```
+### Steps (order matters)
 
-3. Open `http://localhost:5173`.
+1. **Start the FastAPI backend** on the same machine (from your Kellner backend repo), for example:
+
+   ```bash
+   uvicorn app.main:app --reload --host 127.0.0.1 --port 8000
+   ```
+
+2. **Check the API is up** (optional):
+
+   ```bash
+   curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8000/health
+   ```
+
+   You should get `200` (or whatever your app returns for `/health`), not a connection error.
+
+3. **Start the frontend** from this repo root:
+
+   ```bash
+   npm run dev
+   ```
+
+4. Open the URL Vite prints (often `http://localhost:5173`; another port if 5173 is busy).
+
+### After `git pull` — common mistake
+
+- Pulling this repo **does not** start the backend. Each developer must run **uvicorn** (or their backend) **before** `npm run dev`.
+- If `client/.env` sets **`VITE_API_BASE_URL`** to a **remote** server, local `npm run dev` will call that host for API URLs **unless** you override for local testing. To use the Vite proxy to **localhost:8000**, add **`client/.env.local`** with:
+
+  ```env
+  VITE_API_BASE_URL=
+  ```
+
+  (Empty value = same-origin `/api` → proxied to `127.0.0.1:8000`.)
+
+### Troubleshooting
+
+| Symptom | Cause |
+|--------|--------|
+| `ECONNREFUSED 127.0.0.1:8000` | Backend not running, or wrong port. Start uvicorn on **8000** or set `VITE_KELLNER_API_PORT` in `client/.env` to match your port. |
+| Proxy error on `/api/...` | Same as above — fix backend first. |
+| Calls go to wrong host | Check `VITE_API_BASE_URL` in `client/.env`; use `.env.local` to override locally. |
 
 ## Routing
 
