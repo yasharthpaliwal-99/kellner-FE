@@ -1,0 +1,135 @@
+.guest-entry {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  color: var(--text);
+}
+
+.guest-entry-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border-soft);
+  box-shadow: var(--shadow);
+}
+
+.guest-entry-brand {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.guest-entry-logo {
+  height: clamp(3rem, 8vw, 4.5rem);
+  width: auto;
+  object-fit: contain;
+}
+
+.guest-entry-tag {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--muted);
+}
+
+.guest-entry-link-kitchen {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-decoration: none;
+  border-bottom: 1px solid transparent;
+}
+
+.guest-entry-link-kitchen:hover {
+  color: var(--text);
+  border-bottom-color: var(--border-soft);
+}
+
+.guest-entry-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 2rem 1.25rem;
+  max-width: 28rem;
+  margin: 0 auto;
+  text-align: center;
+}
+
+.guest-entry-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin: 0 0 0.75rem;
+}
+
+.guest-entry-sub {
+  margin: 0 0 2rem;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.5;
+}
+
+.guest-entry-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  width: 100%;
+}
+
+.guest-entry-file-input {
+  position: absolute;
+  width: 0;
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.guest-entry-btn {
+  display: block;
+  width: 100%;
+  padding: 0.85rem 1.25rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  border: 1px solid var(--border-soft);
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.guest-entry-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.guest-entry-btn-primary {
+  background: var(--text);
+  color: var(--surface);
+  border-color: var(--text);
+}
+
+.guest-entry-btn-primary:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.guest-entry-btn-secondary {
+  background: transparent;
+  color: var(--text);
+}
+
+.guest-entry-btn-secondary:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.guest-entry-error {
+  margin-top: 1.25rem;
+  font-size: 0.9rem;
+  color: #b91c1c;
+  text-align: center;
+}

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import type { MenuSuggestion } from "../types";
 import { VoiceOrb } from "../components/VoiceOrb";
 import { MenuSuggestionCards } from "../components/MenuSuggestionCards";
@@ -7,6 +7,9 @@ import { KellnerVoicePanel } from "../components/KellnerVoicePanel";
 import "./GuestVoicePage.css";
 
 export default function GuestVoicePage() {
+  const [search] = useSearchParams();
+  const hotelQ = search.get("hotel_id");
+  const guestHome = hotelQ ? `/guest?hotel_id=${encodeURIComponent(hotelQ)}` : "/guest";
   const [suggestions, setSuggestions] = useState<MenuSuggestion[]>([]);
   const [micLive, setMicLive] = useState(false);
   const [phaseLabel, setPhaseLabel] = useState("Connecting…");
@@ -29,6 +32,9 @@ export default function GuestVoicePage() {
             title={apiConnected ? "Assistant connected" : "Connecting…"}
             aria-label={apiConnected ? "Assistant connected" : "Not connected"}
           />
+          <Link className="guest-link-kitchen" to={guestHome}>
+            Back
+          </Link>
           <Link className="guest-link-kitchen" to="/kitchen">
             Kitchen staff
           </Link>

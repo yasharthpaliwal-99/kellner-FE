@@ -25,7 +25,8 @@ npm run dev
 ## Routing
 
 - `/` -> Login page
-- `/guest` -> Customer voice page
+- `/guest` -> Guest landing (Face ID or continue without sign-in); requires device login
+- `/guest/voice` -> Customer voice session
 - `/kitchen` -> Kitchen dashboard
 
 ## Environment
@@ -75,6 +76,7 @@ sudo systemctl reload nginx
 
 ## API Contracts Used
 
+- `POST /api/face/local/recognise` — `multipart/form-data` field `image`; header `x-device-session`; returns `customer_id` (used on WebSocket as `customer_id` query param when set)
 - `POST /api/device/login`
   - Role `device`: requires `hotel_id`, `password`, `table_number`, `device_id`
   - Role `kitchen`: requires `hotel_id`, `password`, `device_id`
