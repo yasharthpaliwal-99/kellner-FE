@@ -227,28 +227,31 @@ export function KellnerVoicePanel({
   }, [voiceActive, micMuted]);
 
   useEffect(() => {
-    const url = getKellnerWebSocketUrl();
-    const ws = new WebSocket(url);
-    wsRef.current = ws;
+    /** Created inside deferred connect; avoids Strict Mode closing a CONNECTING socket (console noise). */
+    let ws: WebSocket | null = null;
+    const connectTimer = window.setTimeout(() => {
+      const url = getKellnerWebSocketUrl();
+      ws = new WebSocket(url);
+      wsRef.current = ws;
 
-    ws.onopen = () => {
-      setConnected(true);
-      setStartDisabled(false);
-      setStatus("Ready — tap Start voice chat.");
-    };
+      ws.onopen = () => {
+        setConnected(true);
+        setStartDisabled(false);
+        setStatus("Ready — tap Start voice chat.");
+      };
 
-    ws.onclose = () => {
-      setConnected(false);
-      setStartDisabled(true);
-      stopVoiceCapture();
-      setStatus("Disconnected.");
-    };
+      ws.onclose = () => {
+        setConnected(false);
+        setStartDisabled(true);
+        stopVoiceCapture();
+        setStatus("Disconnected.");
+      };
 
-    ws.onerror = () => {
-      setStatus("WebSocket error — run uvicorn on :8000 and keep Vite proxy for /api/ws.");
-    };
+      ws.onerror = () => {
+        setStatus("WebSocket error — run uvicorn on :8000 and keep Vite proxy for /api/ws.");
+      };
 
-    ws.onmessage = async (ev) => {
+      ws.onmessage = async (ev) => {
       if (typeof ev.data !== "string") return;
       let msg: Record<string, unknown>;
       try {
@@ -329,10 +332,14 @@ export function KellnerVoicePanel({
         setStatus("Playback error — check console");
       }
     };
+    }, 0);
 
     return () => {
+      clearTimeout(connectTimer);
       stopVoiceCapture();
-      ws.close();
+      if (ws) {
+        ws.close();
+      }
       wsRef.current = null;
     };
     // Kellner FastAPI: single socket; onRecRef holds latest recommendations callback.

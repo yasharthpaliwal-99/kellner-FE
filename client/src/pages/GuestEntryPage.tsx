@@ -1,9 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { getAuthSession } from "../lib/authSession";
 import { apiUrl } from "../lib/api";
 import { clearGuestCustomerId, setGuestCustomerId } from "../lib/guestCustomer";
 import "./GuestEntryPage.css";
+
+const COUNTDOWN_SECONDS = 3;
+/** How long to show “0” before capturing (ms). */
+const COUNTDOWN_ZERO_MS = 600;
 
 type FaceRecogniseOk = {
   ok: true;
@@ -38,9 +43,12 @@ export default function GuestEntryPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const faceCaptureCancelledRef = useRef(false);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [cameraOpen, setCameraOpen] = useState(false);
+  const [countdown, setCountdown] = useState<number | null>(null);
 
   const session = getAuthSession();
   const hotelId = search.get("hotel_id");
@@ -68,18 +76,35 @@ export default function GuestEntryPage() {
     if (videoRef.current) videoRef.current.srcObject = null;
   }, []);
 
+  const cancelCamera = useCallback(() => {
+    faceCaptureCancelledRef.current = true;
+    stopStream();
+    setCameraOpen(false);
+    setCountdown(null);
+  }, [stopStream]);
+
   const postFaceImage = useCallback(
     async (file: File) => {
       if (!session?.session_id) throw new Error("No session.");
       const fd = new FormData();
       fd.append("image", file, file.name || "capture.jpg");
-      const r = await fetch(apiUrl("/api/face/local/recognise"), {
-        method: "POST",
-        headers: {
-          "x-device-session": session.session_id,
-        },
-        body: fd,
-      });
+      let r: Response;
+      try {
+        r = await fetch(apiUrl("/api/face/local/recognise"), {
+          method: "POST",
+          headers: {
+            "x-device-session": session.session_id,
+          },
+          body: fd,
+        });
+      } catch (err) {
+        if (err instanceof TypeError) {
+          throw new Error(
+            "Could not reach the face service — the connection was closed or the server is down. Check that the API is running."
+          );
+        }
+        throw err;
+      }
       const j = (await r.json().catch(() => ({}))) as FaceRecogniseOk & {
         detail?: string | string[];
       };
@@ -111,6 +136,7 @@ export default function GuestEntryPage() {
     }
     if (!session?.session_id) return;
 
+    faceCaptureCancelledRef.current = false;
     setBusy(true);
     try {
       let stream: MediaStream | null = null;
@@ -124,6 +150,11 @@ export default function GuestEntryPage() {
       }
       streamRef.current = stream;
 
+      flushSync(() => setCameraOpen(true));
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      });
+
       const video = videoRef.current;
       const canvas = canvasRef.current;
       if (!video || !canvas) {
@@ -133,6 +164,17 @@ export default function GuestEntryPage() {
       video.srcObject = stream;
       await video.play().catch(() => {});
       await waitForVideoReady(video);
+      if (faceCaptureCancelledRef.current) return;
+
+      for (let s = COUNTDOWN_SECONDS; s >= 1; s--) {
+        if (faceCaptureCancelledRef.current) return;
+        flushSync(() => setCountdown(s));
+        await new Promise((r) => setTimeout(r, 1000));
+      }
+      if (faceCaptureCancelledRef.current) return;
+      flushSync(() => setCountdown(0));
+      await new Promise((r) => setTimeout(r, COUNTDOWN_ZERO_MS));
+      if (faceCaptureCancelledRef.current) return;
 
       const w = video.videoWidth;
       const h = video.videoHeight;
@@ -164,16 +206,22 @@ export default function GuestEntryPage() {
 
       await postFaceImage(file);
     } catch (e) {
-      const name = e && typeof e === "object" && "name" in e ? String((e as { name: string }).name) : "";
-      if (name === "NotAllowedError" || name === "PermissionDeniedError") {
-        setError("Camera permission denied.");
-      } else if (e instanceof Error) {
-        setError(e.message);
+      if (faceCaptureCancelledRef.current) {
+        setError(null);
       } else {
-        setError("Something went wrong.");
+        const name = e && typeof e === "object" && "name" in e ? String((e as { name: string }).name) : "";
+        if (name === "NotAllowedError" || name === "PermissionDeniedError") {
+          setError("Camera permission denied.");
+        } else if (e instanceof Error) {
+          setError(e.message);
+        } else {
+          setError("Something went wrong.");
+        }
       }
     } finally {
       setBusy(false);
+      setCountdown(null);
+      setCameraOpen(false);
       stopStream();
     }
   }, [session, postFaceImage, stopStream]);
@@ -233,15 +281,29 @@ export default function GuestEntryPage() {
         ) : null}
       </main>
 
-      <video
-        ref={videoRef}
-        className="guest-entry-camera-hidden"
-        playsInline
-        muted
-        autoPlay
-        aria-hidden
-      />
-      <canvas ref={canvasRef} className="guest-entry-camera-hidden" aria-hidden />
+      {cameraOpen ? (
+        <div className="guest-entry-camera-overlay" role="dialog" aria-modal="true" aria-label="Face capture">
+          <div className="guest-entry-camera-panel">
+            <p className="guest-entry-camera-hint">Position your face in the frame</p>
+            <div className="guest-entry-camera-video-wrap">
+              <video ref={videoRef} className="guest-entry-camera-video" playsInline muted autoPlay />
+              {countdown !== null && countdown >= 0 ? (
+                <div className="guest-entry-countdown" aria-live="polite">
+                  {countdown}
+                </div>
+              ) : null}
+            </div>
+            <canvas ref={canvasRef} className="guest-entry-camera-hidden" aria-hidden />
+            <button
+              type="button"
+              className="guest-entry-btn guest-entry-btn-secondary guest-entry-cancel"
+              onClick={cancelCamera}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
