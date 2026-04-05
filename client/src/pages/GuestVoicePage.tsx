@@ -11,9 +11,15 @@ export default function GuestVoicePage() {
   const hotelQ = search.get("hotel_id");
   const guestHome = hotelQ ? `/guest?hotel_id=${encodeURIComponent(hotelQ)}` : "/guest";
   const [suggestions, setSuggestions] = useState<MenuSuggestion[]>([]);
+  const [hasAskedForSuggestions, setHasAskedForSuggestions] = useState(false);
+  const [recommendationsLoading, setRecommendationsLoading] = useState(false);
   const [micLive, setMicLive] = useState(false);
   const [phaseLabel, setPhaseLabel] = useState("Connecting…");
   const [apiConnected, setApiConnected] = useState(false);
+
+  const emptySuggestionMessage = hasAskedForSuggestions
+    ? "Sorry, we could not find matching suggestions right now."
+    : "Hi there! What would you like to have today?";
 
   return (
     <div className="guest-page">
@@ -56,7 +62,13 @@ export default function GuestVoicePage() {
 
           <KellnerVoicePanel
             variant="guest"
-            onRecommendations={(items) => setSuggestions(items)}
+            onRecommendations={(items) => {
+              setSuggestions(items);
+            }}
+            onRecommendationsLoadingChange={(loading) => {
+              if (loading) setHasAskedForSuggestions(true);
+              setRecommendationsLoading(loading);
+            }}
             onVoiceActiveChange={setMicLive}
             onPhaseLabelChange={setPhaseLabel}
             onConnectionChange={setApiConnected}
@@ -65,7 +77,11 @@ export default function GuestVoicePage() {
 
         <aside className="guest-suggestions" aria-label="Suggestions from your assistant">
           <h2 className="guest-suggestions-title">Suggestions</h2>
-          <MenuSuggestionCards items={suggestions} loading={false} />
+          <MenuSuggestionCards
+            items={suggestions}
+            loading={recommendationsLoading}
+            emptyMessage={emptySuggestionMessage}
+          />
         </aside>
       </main>
     </div>

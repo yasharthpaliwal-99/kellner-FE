@@ -40,6 +40,7 @@ function floatTo16BitPCM(float32Array: Float32Array) {
 
 type Props = {
   onRecommendations?: (items: MenuSuggestion[]) => void;
+  onRecommendationsLoadingChange?: (loading: boolean) => void;
   /** Fires when mic streaming is on/off (for orb UI). */
   onVoiceActiveChange?: (active: boolean) => void;
   /** Short line for under-orb label (Listening, Thinking, …). */
@@ -66,6 +67,7 @@ function phaseLabelFromStatus(status: string): string {
 
 export function KellnerVoicePanel({
   onRecommendations,
+  onRecommendationsLoadingChange,
   onVoiceActiveChange,
   onPhaseLabelChange,
   onConnectionChange,
@@ -86,6 +88,11 @@ export function KellnerVoicePanel({
   useEffect(() => {
     onRecRef.current = onRecommendations;
   }, [onRecommendations]);
+
+  const onRecLoadingRef = useRef(onRecommendationsLoadingChange);
+  useEffect(() => {
+    onRecLoadingRef.current = onRecommendationsLoadingChange;
+  }, [onRecommendationsLoadingChange]);
 
   const onVoiceRef = useRef(onVoiceActiveChange);
   useEffect(() => {
@@ -241,6 +248,7 @@ export function KellnerVoicePanel({
       setConnected(false);
       setStartDisabled(true);
       stopVoiceCapture();
+      onRecLoadingRef.current?.(false);
       setStatus("Disconnected.");
     };
 
@@ -266,7 +274,7 @@ export function KellnerVoicePanel({
         } else if (type === "transcript") {
           setLivePartial("");
           playbackTurnIdRef.current = Number(msg.turn_id);
-          onRecRef.current?.([]);
+          onRecLoadingRef.current?.(true);
           const ut = String(msg.text ?? "");
           setLines((prev) => [
             ...prev,
@@ -281,6 +289,7 @@ export function KellnerVoicePanel({
           if (Number(msg.turn_id) !== Number(playbackTurnIdRef.current)) return;
           const items = (msg.items as RecItem[]) ?? [];
           onRecRef.current?.(mapRecItems(items));
+          onRecLoadingRef.current?.(false);
         } else if (type === "assistant_text_delta") {
           if (!playbackMatchesTurn(msg, false)) return;
           const delta = String(msg.text ?? "");
@@ -302,6 +311,7 @@ export function KellnerVoicePanel({
         } else if (type === "done") {
           setLivePartial("");
           assistantSpeakingRef.current = false;
+          onRecLoadingRef.current?.(false);
           const lineId = assistantLineIdRef.current;
           if (lineId) {
             setLines((prev) =>
@@ -315,6 +325,7 @@ export function KellnerVoicePanel({
           stopAllPlayback();
           assistantSpeakingRef.current = false;
           assistantLineIdRef.current = null;
+          onRecLoadingRef.current?.(false);
           setStatus("Listening…");
         } else if (type === "error") {
           const lineId = assistantLineIdRef.current;
@@ -322,10 +333,12 @@ export function KellnerVoicePanel({
             setLines((prev) => prev.filter((l) => l.id !== lineId));
             assistantLineIdRef.current = null;
           }
+          onRecLoadingRef.current?.(false);
           setStatus(String(msg.message ?? "Error"));
         }
       } catch (e) {
         console.error("ws message handler", e);
+        onRecLoadingRef.current?.(false);
         setStatus("Playback error — check console");
       }
     };
