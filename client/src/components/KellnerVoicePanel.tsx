@@ -134,6 +134,7 @@ export function KellnerVoicePanel({
   }, []);
 
   const sendInterrupt = useCallback(() => {
+    playbackTurnIdRef.current = null;
     stopAllPlayback();
     assistantSpeakingRef.current = false;
     const ws = wsRef.current;
@@ -315,6 +316,7 @@ export function KellnerVoicePanel({
           if (!activeSourcesRef.current.length) setStatus("Listening…");
         } else if (type === "interrupted") {
           setLivePartial("");
+          playbackTurnIdRef.current = null;
           stopAllPlayback();
           assistantSpeakingRef.current = false;
           assistantLineIdRef.current = null;
@@ -337,6 +339,15 @@ export function KellnerVoicePanel({
     return () => {
       clearTimeout(connectTimer);
       stopVoiceCapture();
+      playbackTurnIdRef.current = null;
+      activeSourcesRef.current.forEach((s) => {
+        try { s.stop(); } catch { /* already stopped */ }
+      });
+      activeSourcesRef.current = [];
+      if (audioCtxRef.current) {
+        audioCtxRef.current.close().catch(() => {});
+        audioCtxRef.current = null;
+      }
       if (ws) {
         ws.close();
       }
