@@ -40,10 +40,13 @@ function floatTo16BitPCM(float32Array: Float32Array) {
 
 type Props = {
   onRecommendations?: (items: MenuSuggestion[]) => void;
+  onRecommendationsLoadingChange?: (loading: boolean) => void;
   /** Fires when mic streaming is on/off (for orb UI). */
   onVoiceActiveChange?: (active: boolean) => void;
   /** Short line for under-orb label (Listening, Thinking, …). */
   onPhaseLabelChange?: (label: string) => void;
+  /** Fires on each animation frame with 4 frequency-band energy values [0-1] (bass → treble). */
+  onAudioBands?: (bands: [number, number, number, number]) => void;
   /** default = full panel; guest = tighter layout, no duplicate status line */
   variant?: "default" | "guest";
   onConnectionChange?: (connected: boolean) => void;
@@ -66,8 +69,10 @@ function phaseLabelFromStatus(status: string): string {
 
 export function KellnerVoicePanel({
   onRecommendations,
+  onRecommendationsLoadingChange,
   onVoiceActiveChange,
   onPhaseLabelChange,
+  onAudioBands,
   onConnectionChange,
   variant = "default",
 }: Props) {
@@ -86,6 +91,11 @@ export function KellnerVoicePanel({
   useEffect(() => {
     onRecRef.current = onRecommendations;
   }, [onRecommendations]);
+
+  const onRecLoadingRef = useRef(onRecommendationsLoadingChange);
+  useEffect(() => {
+    onRecLoadingRef.current = onRecommendationsLoadingChange;
+  }, [onRecommendationsLoadingChange]);
 
   const onVoiceRef = useRef(onVoiceActiveChange);
   useEffect(() => {
@@ -111,6 +121,11 @@ export function KellnerVoicePanel({
   const audioCtxRef = useRef<AudioContext | null>(null);
   const recorderStreamRef = useRef<MediaStream | null>(null);
   const recorderNodeRef = useRef<ScriptProcessorNode | null>(null);
+  const analyserNodeRef = useRef<AnalyserNode | null>(null);
+  const analyserBufRef = useRef<Uint8Array | null>(null);
+  const rafIdRef = useRef<number | null>(null);
+  const onAudioBandsRef = useRef(onAudioBands);
+  useEffect(() => { onAudioBandsRef.current = onAudioBands; }, [onAudioBands]);
   const voiceActiveRef = useRef(false);
   const playbackTurnIdRef = useRef<number | null>(null);
   const assistantLineIdRef = useRef<string | null>(null);
@@ -211,13 +226,21 @@ export function KellnerVoicePanel({
   function stopVoiceCapture() {
     voiceActiveRef.current = false;
     setVoiceActive(false);
+    if (rafIdRef.current !== null) {
+      cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = null;
+    }
+    onAudioBandsRef.current?.([0, 0, 0, 0]);
     try {
       recorderNodeRef.current?.disconnect();
+      analyserNodeRef.current?.disconnect();
       recorderStreamRef.current?.getTracks().forEach((t) => t.stop());
     } catch {
       /* ignore */
     }
     recorderNodeRef.current = null;
+    analyserNodeRef.current = null;
+    analyserBufRef.current = null;
     recorderStreamRef.current = null;
   }
 
@@ -241,12 +264,13 @@ export function KellnerVoicePanel({
         setStatus("Ready — tap Start voice chat.");
       };
 
-      ws.onclose = () => {
-        setConnected(false);
-        setStartDisabled(true);
-        stopVoiceCapture();
-        setStatus("Disconnected.");
-      };
+    ws.onclose = () => {
+      setConnected(false);
+      setStartDisabled(true);
+      stopVoiceCapture();
+      onRecLoadingRef.current?.(false);
+      setStatus("Disconnected.");
+    };
 
       ws.onerror = () => {
         setStatus("WebSocket error — run uvicorn on :8000 and keep Vite proxy for /api/ws.");
@@ -270,7 +294,7 @@ export function KellnerVoicePanel({
         } else if (type === "transcript") {
           setLivePartial("");
           playbackTurnIdRef.current = Number(msg.turn_id);
-          onRecRef.current?.([]);
+          onRecLoadingRef.current?.(true);
           const ut = String(msg.text ?? "");
           setLines((prev) => [
             ...prev,
@@ -285,6 +309,7 @@ export function KellnerVoicePanel({
           if (Number(msg.turn_id) !== Number(playbackTurnIdRef.current)) return;
           const items = (msg.items as RecItem[]) ?? [];
           onRecRef.current?.(mapRecItems(items));
+          onRecLoadingRef.current?.(false);
         } else if (type === "assistant_text_delta") {
           if (!playbackMatchesTurn(msg, false)) return;
           const delta = String(msg.text ?? "");
@@ -306,6 +331,7 @@ export function KellnerVoicePanel({
         } else if (type === "done") {
           setLivePartial("");
           assistantSpeakingRef.current = false;
+          onRecLoadingRef.current?.(false);
           const lineId = assistantLineIdRef.current;
           if (lineId) {
             setLines((prev) =>
@@ -320,6 +346,7 @@ export function KellnerVoicePanel({
           stopAllPlayback();
           assistantSpeakingRef.current = false;
           assistantLineIdRef.current = null;
+          onRecLoadingRef.current?.(false);
           setStatus("Listening…");
         } else if (type === "error") {
           const lineId = assistantLineIdRef.current;
@@ -327,10 +354,12 @@ export function KellnerVoicePanel({
             setLines((prev) => prev.filter((l) => l.id !== lineId));
             assistantLineIdRef.current = null;
           }
+          onRecLoadingRef.current?.(false);
           setStatus(String(msg.message ?? "Error"));
         }
       } catch (e) {
         console.error("ws message handler", e);
+        onRecLoadingRef.current?.(false);
         setStatus("Playback error — check console");
       }
     };
@@ -380,6 +409,37 @@ export function KellnerVoicePanel({
       ws.send(JSON.stringify({ type: "voice_session" }));
 
       const source = ctx.createMediaStreamSource(stream);
+
+      // ── Analyser for pitch-reactive wave rings ────────────────────────
+      const analyser = ctx.createAnalyser();
+      analyser.fftSize = 256;              // 128 usable bins
+      analyser.smoothingTimeConstant = 0.78;
+      analyserNodeRef.current = analyser;
+      const freqBuf = new Uint8Array(analyser.frequencyBinCount);
+      analyserBufRef.current = freqBuf;
+
+      // Each bin ≈ sampleRate/fftSize Hz. For 44100 Hz that's ~172 Hz/bin.
+      // Band 0 (inner ring / bass):   bins 0-3   ≈ 0–516 Hz
+      // Band 1 (low-mid):             bins 4-9   ≈ 688–1548 Hz
+      // Band 2 (mid):                 bins 10-22 ≈ 1720–3784 Hz
+      // Band 3 (outer ring / treble): bins 23-50 ≈ 3956–8600 Hz
+      const BANDS: [number, number][] = [[0, 3], [4, 9], [10, 22], [23, 50]];
+      const bandAvg = (start: number, end: number): number => {
+        let sum = 0;
+        for (let i = start; i <= end; i++) sum += freqBuf[i]!;
+        return sum / ((end - start + 1) * 255);
+      };
+
+      const rafLoop = () => {
+        rafIdRef.current = requestAnimationFrame(rafLoop);
+        analyser.getByteFrequencyData(freqBuf);
+        onAudioBandsRef.current?.(
+          BANDS.map(([s, e]) => bandAvg(s, e)) as [number, number, number, number]
+        );
+      };
+      rafIdRef.current = requestAnimationFrame(rafLoop);
+      // ─────────────────────────────────────────────────────────────────
+
       const node = ctx.createScriptProcessor(4096, 1, 1);
       recorderNodeRef.current = node;
       const fromRate = ctx.sampleRate;
@@ -406,7 +466,8 @@ export function KellnerVoicePanel({
         wsRef.current.send(pcm.buffer);
       };
 
-      source.connect(node);
+      source.connect(analyser);
+      analyser.connect(node);
       const silentOut = ctx.createGain();
       silentOut.gain.value = 0;
       node.connect(silentOut);

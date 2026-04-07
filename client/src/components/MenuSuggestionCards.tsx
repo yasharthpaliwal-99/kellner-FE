@@ -18,37 +18,60 @@ function formatPrice(price: number | null, currency: string) {
 type Props = {
   items: MenuSuggestion[];
   loading: boolean;
+  emptyMessage?: string;
 };
 
-export function MenuSuggestionCards({ items, loading }: Props) {
-  const slots: (MenuSuggestion | null)[] = [];
-  for (let i = 0; i < SLOT_COUNT; i++) {
-    slots.push(items[i] ?? null);
+export function MenuSuggestionCards({ items, loading, emptyMessage }: Props) {
+  const visibleItems = items.slice(0, SLOT_COUNT);
+
+  if (loading) {
+    return (
+      <div className="menu-suggestion-cards" role="list">
+        <article className="menu-suggestion-card is-empty is-thinking" role="listitem">
+          <div className="menu-thinking-wrap" aria-live="polite">
+            <div className="menu-thinking-head">
+              <span className="menu-thinking-dot" aria-hidden />
+              <p className="menu-card-loading">Thinking about your best options…</p>
+            </div>
+            <div className="menu-thinking-lines" aria-hidden>
+              <span className="menu-thinking-line menu-thinking-line--lg" />
+              <span className="menu-thinking-line menu-thinking-line--md" />
+              <span className="menu-thinking-line menu-thinking-line--sm" />
+            </div>
+          </div>
+        </article>
+      </div>
+    );
+  }
+
+  if (!visibleItems.length) {
+    return (
+      <div className="menu-suggestion-cards" role="status" aria-live="polite">
+        <article className="menu-suggestion-card is-empty">
+          <p className="menu-card-empty-state">
+            {emptyMessage ?? "Hi there! What would you like to have today?"}
+          </p>
+        </article>
+      </div>
+    );
   }
 
   return (
     <div className="menu-suggestion-cards" role="list">
-      {slots.map((item, index) => (
+      {visibleItems.map((item, index) => (
         <article
-          key={item ? `${item.dish_id}-${item.name}-${index}` : `empty-${index}`}
-          className={`menu-suggestion-card ${item ? "has-item" : "is-empty"}`}
+          key={`${item.dish_id}-${item.name}-${index}`}
+          className="menu-suggestion-card has-item"
           role="listitem"
         >
-          {loading && index === 0 ? (
-            <p className="menu-card-loading">Loading suggestions…</p>
-          ) : item ? (
-            <>
-              <header className="menu-card-head">
-                <span className="menu-card-name">{item.name}</span>
-                <span className="menu-card-price">{formatPrice(item.price, item.currency)}</span>
-              </header>
-              <p className="menu-card-info">
-                {item.info?.trim() ? item.info : "Ask Kellner for details or to add this to your order."}
-              </p>
-            </>
-          ) : (
-            <p className="menu-card-placeholder">Next suggestion will appear here</p>
-          )}
+          <span className="menu-card-rank">#{index + 1}</span>
+          <header className="menu-card-head">
+            <span className="menu-card-name">{item.name}</span>
+            <span className="menu-card-price">{formatPrice(item.price, item.currency)}</span>
+          </header>
+          <p className="menu-card-info">
+            {item.info?.trim() ? item.info : "Ask Kellner for details or to add this to your order."}
+          </p>
         </article>
       ))}
     </div>
