@@ -16,6 +16,7 @@ export default function GuestVoicePage() {
   const [micLive, setMicLive] = useState(false);
   const [phaseLabel, setPhaseLabel] = useState("Connecting…");
   const [apiConnected, setApiConnected] = useState(false);
+  const [audioBands, setAudioBands] = useState<[number, number, number, number]>([0, 0, 0, 0]);
 
   const emptySuggestionMessage = hasAskedForSuggestions
     ? "Sorry, we could not find matching suggestions right now."
@@ -54,6 +55,7 @@ export default function GuestVoicePage() {
               state={micLive ? "listening" : "idle"}
               size="compact"
               tone="mono"
+              audioBands={audioBands}
             />
             <p className="guest-phase" aria-live="polite">
               {phaseLabel}
@@ -72,6 +74,7 @@ export default function GuestVoicePage() {
             onVoiceActiveChange={setMicLive}
             onPhaseLabelChange={setPhaseLabel}
             onConnectionChange={setApiConnected}
+            onAudioBands={setAudioBands}
           />
         </section>
 

@@ -180,6 +180,165 @@
   }
 }
 
+/* ============================================================
+   Waveform rings — radiate outward from the orb
+   ============================================================ */
+.voice-orb-wave {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+/* Brand-tone ring sizes & colours */
+.voice-orb-wave--1 {
+  inset: -14%;
+  border: 1.5px solid rgba(99, 102, 241, 0.42);
+  animation: wave-idle 3.8s ease-in-out infinite 0s;
+}
+.voice-orb-wave--2 {
+  inset: -29%;
+  border: 1px solid rgba(129, 140, 248, 0.27);
+  animation: wave-idle 3.8s ease-in-out infinite 0.5s;
+}
+.voice-orb-wave--3 {
+  inset: -46%;
+  border: 1px solid rgba(168, 85, 247, 0.17);
+  animation: wave-idle 3.8s ease-in-out infinite 1s;
+}
+.voice-orb-wave--4 {
+  inset: -65%;
+  border: 1px solid rgba(168, 85, 247, 0.09);
+  animation: wave-idle 3.8s ease-in-out infinite 1.5s;
+}
+
+/* Mono-tone ring colours */
+.voice-orb-wrap--mono .voice-orb-wave--1 { border-color: rgba(200, 200, 200, 0.38); }
+.voice-orb-wrap--mono .voice-orb-wave--2 { border-color: rgba(165, 165, 165, 0.24); }
+.voice-orb-wrap--mono .voice-orb-wave--3 { border-color: rgba(130, 130, 130, 0.15); }
+.voice-orb-wrap--mono .voice-orb-wave--4 { border-color: rgba(100, 100, 100, 0.08); }
+
+/* Idle: slow subtle breathing */
+@keyframes wave-idle {
+  0%, 100% {
+    opacity: 0.32;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.65;
+    transform: scale(1.018);
+  }
+}
+
+/* Listening: rings ripple outward — each one chases the last */
+.voice-orb-wrap.is-listening .voice-orb-wave--1 {
+  animation: wave-pulse 2.2s ease-out infinite 0s;
+}
+.voice-orb-wrap.is-listening .voice-orb-wave--2 {
+  animation: wave-pulse 2.2s ease-out infinite 0.44s;
+}
+.voice-orb-wrap.is-listening .voice-orb-wave--3 {
+  animation: wave-pulse 2.2s ease-out infinite 0.88s;
+}
+.voice-orb-wrap.is-listening .voice-orb-wave--4 {
+  animation: wave-pulse 2.2s ease-out infinite 1.32s;
+}
+
+@keyframes wave-pulse {
+  0% {
+    opacity: 0.92;
+    transform: scale(0.93);
+    filter: blur(0px);
+  }
+  55% {
+    opacity: 0.18;
+    transform: scale(1.08);
+    filter: blur(1px);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.15);
+    filter: blur(2px);
+  }
+}
+
+/* ---- Audio-driven mode: real-time pitch replaces keyframes ---- */
+/*
+ * When is-audio-driven is set, CSS custom properties --w1…--w4 hold
+ * the live band energy [0, 1] for bass → treble.
+ * Each ring scales and brightens proportionally; transition smooths frames.
+ */
+.voice-orb-wrap.is-audio-driven .voice-orb-wave {
+  animation: none;
+  transition: transform 75ms ease-out, opacity 75ms ease-out, filter 75ms ease-out;
+}
+
+.voice-orb-wrap.is-audio-driven .voice-orb-wave--1 {
+  transform: scale(calc(1 + var(--w1, 0) * 0.10));
+  opacity: calc(0.14 + var(--w1, 0) * 0.72);
+  filter: blur(calc(var(--w1, 0) * 0.5px));
+}
+.voice-orb-wrap.is-audio-driven .voice-orb-wave--2 {
+  transform: scale(calc(1 + var(--w2, 0) * 0.14));
+  opacity: calc(0.11 + var(--w2, 0) * 0.60);
+  filter: blur(calc(var(--w2, 0) * 0.8px));
+}
+.voice-orb-wrap.is-audio-driven .voice-orb-wave--3 {
+  transform: scale(calc(1 + var(--w3, 0) * 0.18));
+  opacity: calc(0.08 + var(--w3, 0) * 0.50);
+  filter: blur(calc(var(--w3, 0) * 1px));
+}
+.voice-orb-wrap.is-audio-driven .voice-orb-wave--4 {
+  transform: scale(calc(1 + var(--w4, 0) * 0.22));
+  opacity: calc(0.05 + var(--w4, 0) * 0.40);
+  filter: blur(calc(var(--w4, 0) * 1.5px));
+}
+
+/* ---- Audio-driven violet glow ---- */
+/*
+ * voice-orb-glow-accent: always violet/indigo, lives behind the orb.
+ * Hidden by default; for brand tone the existing glow already has violet —
+ * here we scale it via --wglow. For mono tone the accent provides the
+ * violet halo that swells with pitch.
+ */
+.voice-orb-glow-accent {
+  position: absolute;
+  inset: -18%;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(129, 140, 248, 0.60) 0%,
+    rgba(168, 85, 247, 0.32) 42%,
+    transparent 70%
+  );
+  filter: blur(30px);
+  opacity: 0;
+  transform: scale(0.82);
+  pointer-events: none;
+  transition: opacity 120ms ease-out, transform 120ms ease-out, filter 120ms ease-out;
+}
+
+/* Brand tone: existing glow scales with pitch; accent stays hidden */
+.voice-orb-wrap.is-audio-driven .voice-orb-glow {
+  animation: none;
+  transition: transform 120ms ease-out, opacity 120ms ease-out, filter 120ms ease-out;
+  transform: scale(calc(1 + var(--wglow, 0) * 0.48));
+  opacity: calc(0.72 + var(--wglow, 0) * 0.28);
+  filter: blur(calc(28px + var(--wglow, 0) * 10px));
+}
+
+/* Mono tone: grey glow scales subtly; violet accent blooms from silence */
+.voice-orb-wrap--mono.is-audio-driven .voice-orb-glow {
+  transform: scale(calc(1 + var(--wglow, 0) * 0.22));
+  opacity: calc(0.55 + var(--wglow, 0) * 0.30);
+}
+.voice-orb-wrap--mono.is-audio-driven .voice-orb-glow-accent {
+  opacity: calc(var(--wglow, 0) * 0.82);
+  transform: scale(calc(0.82 + var(--wglow, 0) * 0.58));
+  filter: blur(calc(28px + var(--wglow, 0) * 14px));
+}
+
+/* ============================================================ */
+
 @media (min-width: 900px) {
   .voice-orb-wrap:not(.voice-orb-wrap--compact) {
     width: min(32vw, 16rem);
