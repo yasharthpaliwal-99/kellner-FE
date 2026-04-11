@@ -90,3 +90,13 @@ export type MenuSuggestion = {
   currency: string;
   info: string;
 };
+
+/** Kitchen menu row — POST /api/fetch_menu response `items` */
+export type KitchenMenuItem = {
+  dish_id: number;
+  name: string;
+  price: number | string | null;
+  available: boolean;
+};
+
+export type KitchenNavTab = "home" | "orders" | "menu";

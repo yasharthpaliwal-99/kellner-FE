@@ -1,10 +1,9 @@
+import type { KitchenNavTab } from "../types";
 import "./Nav.css";
 
-type Tab = "home" | "orders";
-
 type Props = {
-  active: Tab;
-  onChange: (t: Tab) => void;
+  active: KitchenNavTab;
+  onChange: (t: KitchenNavTab) => void;
 };
 
 export function Nav({ active, onChange }: Props) {
@@ -23,6 +22,13 @@ export function Nav({ active, onChange }: Props) {
         onClick={() => onChange("orders")}
       >
         Order list
+      </button>
+      <button
+        type="button"
+        className={active === "menu" ? "nav-item active" : "nav-item"}
+        onClick={() => onChange("menu")}
+      >
+        Menu
       </button>
     </nav>
   );

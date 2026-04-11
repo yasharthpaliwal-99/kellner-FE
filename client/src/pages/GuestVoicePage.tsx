@@ -28,10 +28,9 @@ export default function GuestVoicePage() {
         <div className="guest-brand">
           <img
             className="guest-brand-logo"
-            src="/kellnerlogo.jpg"
+            src="/real.png"
             alt="Kellner"
           />
-          <span className="guest-brand-tag">Guest</span>
         </div>
         <div className="guest-header-right">
           <span
@@ -41,9 +40,6 @@ export default function GuestVoicePage() {
           />
           <Link className="guest-link-kitchen" to={guestHome}>
             Back
-          </Link>
-          <Link className="guest-link-kitchen" to="/kitchen">
-            Kitchen staff
           </Link>
         </div>
       </header>

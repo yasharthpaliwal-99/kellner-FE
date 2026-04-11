@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { getAuthSession } from "../lib/authSession";
 import { apiUrl } from "../lib/api";
 import { clearGuestCustomerId, setGuestCustomerId } from "../lib/guestCustomer";
@@ -9,6 +9,8 @@ import "./GuestEntryPage.css";
 const COUNTDOWN_SECONDS = 3;
 /** How long to show “0” before capturing (ms). */
 const COUNTDOWN_ZERO_MS = 600;
+/** Phase toggle: keep Face ID code shipped but hidden for now. */
+const ENABLE_FACE_ID = false;
 
 type FaceRecogniseOk = {
   ok: true;
@@ -238,47 +240,61 @@ export default function GuestEntryPage() {
 
   return (
     <div className="guest-entry">
-      <header className="guest-entry-header">
-        <div className="guest-entry-brand">
-          <img className="guest-entry-logo" src="/kellnerlogo.jpg" alt="Kellner" />
-          <span className="guest-entry-tag">Guest</span>
-        </div>
-        <Link className="guest-entry-link-kitchen" to="/kitchen">
-          Kitchen staff
-        </Link>
-      </header>
-
       <main className="guest-entry-main">
-        <h1 className="guest-entry-title">Welcome</h1>
-        <p className="guest-entry-sub">
-          Choose how you’d like to start your session at the table.
-        </p>
-
-        <div className="guest-entry-actions">
-          <button
-            type="button"
-            className="guest-entry-btn guest-entry-btn-primary"
-            disabled={busy}
-            onClick={() => void startFaceId()}
-          >
-            {busy ? "Capturing…" : "Start with Face ID"}
-          </button>
-
-          <button
-            type="button"
-            className="guest-entry-btn guest-entry-btn-secondary"
-            disabled={busy}
-            onClick={continueWithoutSignIn}
-          >
-            Continue without sign in
-          </button>
-        </div>
-
-        {error ? (
-          <p className="guest-entry-error" role="alert">
-            {error}
+        <div className="guest-entry-shell">
+          <div className="guest-entry-hero">
+            <img className="guest-entry-hero-logo" src="/real.png" alt="Kellner — Order smarter" />
+          </div>
+          <p className="guest-entry-sub">
+            Your table can take orders. Just tap to begin.
           </p>
-        ) : null}
+
+          <div className="guest-entry-actions">
+            {ENABLE_FACE_ID ? (
+              <button
+                type="button"
+                className="guest-entry-btn guest-entry-btn-primary"
+                disabled={busy}
+                onClick={() => void startFaceId()}
+              >
+                {busy ? "Capturing…" : "Start with Face ID"}
+              </button>
+            ) : null}
+
+            <button
+              type="button"
+              className="guest-entry-btn guest-entry-btn-call"
+              disabled={busy}
+              onClick={continueWithoutSignIn}
+            >
+              <span className="guest-entry-btn-call-label">Call waiter</span>
+              <span className="guest-entry-btn-call-glyph" aria-hidden>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path
+                    d="M8 6l6 6-6 6"
+                    stroke="#0a0a0a"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                  <path
+                    d="M12 6l6 6-6 6"
+                    stroke="#ea580c"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </span>
+            </button>
+          </div>
+
+          {error ? (
+            <p className="guest-entry-error" role="alert">
+              {error}
+            </p>
+          ) : null}
+        </div>
       </main>
 
       {cameraOpen ? (
