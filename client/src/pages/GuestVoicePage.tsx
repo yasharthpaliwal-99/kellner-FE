@@ -19,7 +19,7 @@ export default function GuestVoicePage() {
   const [audioBands, setAudioBands] = useState<[number, number, number, number]>([0, 0, 0, 0]);
 
   const emptySuggestionMessage = hasAskedForSuggestions
-    ? "Sorry, we could not find matching suggestions right now."
+    ? "Your suggestions will appear "
     : "Hi there! What would you like to have today?";
 
   return (
