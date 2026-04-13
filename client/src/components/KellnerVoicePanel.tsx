@@ -50,11 +50,17 @@ type Props = {
   /** default = full panel; guest = tighter layout, no duplicate status line */
   variant?: "default" | "guest";
   onConnectionChange?: (connected: boolean) => void;
+  /**
+   * Guest: when true (e.g. navigated from “Call waiter”), connect then start mic automatically
+   * and send `{ type: "guest_greeting" }` after `voice_session` so the backend can open with a welcome line.
+   */
+  autoStartVoiceSession?: boolean;
 };
 
 function phaseLabelFromStatus(status: string): string {
   const s = status.toLowerCase();
   if (status === "Connecting…") return "Connecting…";
+  if (s.includes("starting")) return "Starting…";
   if (s.includes("websocket") || s.includes("error —")) return "Connection issue";
   if (s.includes("disconnected")) return "Disconnected";
   if (s.includes("microphone access denied")) return "Mic blocked";
@@ -75,6 +81,7 @@ export function KellnerVoicePanel({
   onAudioBands,
   onConnectionChange,
   variant = "default",
+  autoStartVoiceSession = false,
 }: Props) {
   const [connected, setConnected] = useState(false);
   const [voiceActive, setVoiceActive] = useState(false);
@@ -86,6 +93,8 @@ export function KellnerVoicePanel({
   const [status, setStatus] = useState("Connecting…");
   const [lines, setLines] = useState<ConvLine[]>([]);
   const [startDisabled, setStartDisabled] = useState(true);
+  /** Guest autostart: hide Start until mic denied — then show for retry. */
+  const [guestAutostartFailed, setGuestAutostartFailed] = useState(false);
 
   const onRecRef = useRef(onRecommendations);
   useEffect(() => {
@@ -118,7 +127,12 @@ export function KellnerVoicePanel({
   const [livePartial, setLivePartial] = useState("");
 
   const wsRef = useRef<WebSocket | null>(null);
+  /** AudioContext for mic capture only — never closed during a session. */
   const audioCtxRef = useRef<AudioContext | null>(null);
+  /** Separate AudioContext exclusively for assistant TTS. Destroyed on interrupt. */
+  const ttsCtxRef = useRef<AudioContext | null>(null);
+  /** GainNode on the TTS context — hard-muted to 0 on interrupt before ctx.close(). */
+  const ttsGainRef = useRef<GainNode | null>(null);
   const recorderStreamRef = useRef<MediaStream | null>(null);
   const recorderNodeRef = useRef<ScriptProcessorNode | null>(null);
   const analyserNodeRef = useRef<AnalyserNode | null>(null);
@@ -131,80 +145,128 @@ export function KellnerVoicePanel({
   const assistantLineIdRef = useRef<string | null>(null);
   const assistantSpeakingRef = useRef(false);
   const nextPlayTimeRef = useRef(0);
-  const activeSourcesRef = useRef<AudioBufferSourceNode[]>([]);
   const bargeInAllowedAfterRef = useRef(0);
   const listRef = useRef<HTMLDivElement | null>(null);
 
-  const stopAllPlayback = useCallback(() => {
-    activeSourcesRef.current.forEach((s) => {
-      try {
-        s.stop();
-      } catch {
-        /* ignore */
-      }
-    });
-    activeSourcesRef.current = [];
-    const ctx = audioCtxRef.current;
-    if (ctx) nextPlayTimeRef.current = ctx.currentTime;
+  // ── Layer 1: discard set — turn_ids whose audio must NEVER play ──
+  const discardedTurnIdsRef = useRef<Set<number>>(new Set());
+
+  // ── Layer 2: playback epoch — bumped on every local interrupt ──
+  const playbackEpochRef = useRef(0);
+
+  /**
+   * FLUSH — the single function that kills all assistant audio.
+   * Called on user barge-in AND on server `interrupted`.
+   *
+   * Layer 3: gain → 0 (instant mute even if close() is async)
+   * Layer 4: stop every tracked source node
+   * Layer 5: close the entire TTS AudioContext (nothing can ever play on a closed ctx)
+   */
+  const flushAssistantAudio = useCallback(() => {
+    // Layer 3 — hard-mute the gain node so speakers go silent THIS sample frame
+    const gain = ttsGainRef.current;
+    if (gain) {
+      try { gain.gain.setValueAtTime(0, 0); } catch { /* ok */ }
+      try { gain.disconnect(); } catch { /* ok */ }
+      ttsGainRef.current = null;
+    }
+
+    // Layer 4 — stop every tracked source
+    // (redundant after close(), but close() might resolve async on some browsers)
+    const ctx = ttsCtxRef.current;
+    if (ctx) {
+      try { ctx.suspend(); } catch { /* ok */ }
+      try { ctx.close(); } catch { /* ok */ }
+      ttsCtxRef.current = null;
+    }
+
+    // Layer 2 — bump epoch so any stale reference in-flight is invalid
+    playbackEpochRef.current += 1;
+    nextPlayTimeRef.current = 0;
   }, []);
 
+  /**
+   * Full client-side interrupt: flush + discard turn + notify server.
+   */
   const sendInterrupt = useCallback(() => {
+    const tid = playbackTurnIdRef.current;
+    if (tid !== null) discardedTurnIdsRef.current.add(tid);  // Layer 1
     playbackTurnIdRef.current = null;
-    stopAllPlayback();
+    flushAssistantAudio();
     assistantSpeakingRef.current = false;
     const ws = wsRef.current;
     if (ws?.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ type: "interrupt" }));
     }
-  }, [stopAllPlayback]);
+  }, [flushAssistantAudio]);
 
+  /** Get or lazily create a fresh TTS context + gain node. */
+  const getTtsCtx = (): { ctx: AudioContext; gain: GainNode } => {
+    let ctx = ttsCtxRef.current;
+    if (!ctx || ctx.state === "closed") {
+      ctx = new AudioContext();
+      ttsCtxRef.current = ctx;
+      const g = ctx.createGain();
+      g.gain.value = 1;
+      g.connect(ctx.destination);
+      ttsGainRef.current = g;
+      nextPlayTimeRef.current = ctx.currentTime;
+    }
+    return { ctx, gain: ttsGainRef.current! };
+  };
+
+  /**
+   * Decode one b64 PCM chunk and schedule it on the TTS context.
+   * Fully synchronous — no await, no microtask yield, no race window.
+   */
   const playPcmB64 = useCallback(
-    async (b64: string, turnId: number) => {
-      if (Number(turnId) !== Number(playbackTurnIdRef.current)) return;
+    (b64: string, turnId: number) => {
+      // Layer 1: discarded turn
+      if (discardedTurnIdsRef.current.has(turnId)) return;
+      // Active turn gate
+      if (playbackTurnIdRef.current === null || Number(turnId) !== Number(playbackTurnIdRef.current)) return;
       if (!b64?.length) return;
-      let ctx = audioCtxRef.current;
-      if (!ctx) {
-        ctx = new AudioContext();
-        audioCtxRef.current = ctx;
-      }
-      if (ctx.state === "suspended") await ctx.resume();
+
+      // Layer 2: epoch snapshot
+      const epochAtEntry = playbackEpochRef.current;
+
+      const { ctx, gain } = getTtsCtx();
+      if (ctx.state === "closed") return;
+      if (playbackEpochRef.current !== epochAtEntry) return;
 
       const bin = atob(b64);
       const u8 = new Uint8Array(bin.length);
       for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
       const nSamp = Math.floor(u8.length / 2);
       if (nSamp < 1) return;
+      if (playbackEpochRef.current !== epochAtEntry) return;
+
       const dv = new DataView(u8.buffer, u8.byteOffset, nSamp * 2);
       const f32 = new Float32Array(nSamp);
       for (let i = 0; i < nSamp; i++) f32[i] = dv.getInt16(i * 2, true) / 32768;
 
       const buffer = ctx.createBuffer(1, f32.length, 16000);
       buffer.copyToChannel(f32, 0);
+      if (playbackEpochRef.current !== epochAtEntry) return;
+
       const src = ctx.createBufferSource();
       src.buffer = buffer;
-      src.connect(ctx.destination);
+      src.connect(gain);  // → gain → ctx.destination
 
       const now = ctx.currentTime;
       if (nextPlayTimeRef.current < now) nextPlayTimeRef.current = now;
-      activeSourcesRef.current.push(src);
-      src.onended = () => {
-        const arr = activeSourcesRef.current;
-        const i = arr.indexOf(src);
-        if (i >= 0) arr.splice(i, 1);
-      };
       src.start(nextPlayTimeRef.current);
       nextPlayTimeRef.current += buffer.duration;
     },
     []
   );
 
-  const playbackMatchesTurn = (msg: { turn_id?: unknown }, allowBootstrap: boolean) => {
-    const t = Number(msg.turn_id);
+  /** Check all layers before accepting any assistant stream message for this turn. */
+  const isTurnAlive = (tid: unknown): boolean => {
+    const t = Number(tid);
     if (Number.isNaN(t)) return false;
-    if (playbackTurnIdRef.current === null && allowBootstrap) {
-      playbackTurnIdRef.current = t;
-      return true;
-    }
+    if (discardedTurnIdsRef.current.has(t)) return false;           // Layer 1
+    if (playbackTurnIdRef.current === null) return false;
     return Number(playbackTurnIdRef.current) === t;
   };
 
@@ -276,7 +338,7 @@ export function KellnerVoicePanel({
         setStatus("WebSocket error — run uvicorn on :8000 and keep Vite proxy for /api/ws.");
       };
 
-      ws.onmessage = async (ev) => {
+      ws.onmessage = (ev) => {
       if (typeof ev.data !== "string") return;
       let msg: Record<string, unknown>;
       try {
@@ -291,27 +353,32 @@ export function KellnerVoicePanel({
           const t = String(msg.text ?? "");
           setLivePartial(t);
           setStatus(`Heard: ${t || "…"}`);
+
         } else if (type === "transcript") {
           setLivePartial("");
-          playbackTurnIdRef.current = Number(msg.turn_id);
+          // Kill any previous turn's audio before accepting the new turn
+          flushAssistantAudio();
+          // New logical turn — clear old discard entries (memory bound)
+          discardedTurnIdsRef.current.clear();
+          const tid = Number(msg.turn_id);
+          playbackTurnIdRef.current = Number.isFinite(tid) ? tid : null;
           onRecLoadingRef.current?.(true);
           const ut = String(msg.text ?? "");
-          setLines((prev) => [
-            ...prev,
-            { id: nextId(), role: "user", text: ut },
-          ]);
+          setLines((prev) => [...prev, { id: nextId(), role: "user", text: ut }]);
           const aid = nextId();
           assistantLineIdRef.current = aid;
           setLines((prev) => [...prev, { id: aid, role: "assistant", text: "…", streaming: true }]);
           setStatus("Thinking…");
           assistantSpeakingRef.current = false;
+
         } else if (type === "recommendations") {
-          if (Number(msg.turn_id) !== Number(playbackTurnIdRef.current)) return;
+          if (!isTurnAlive(msg.turn_id)) return;
           const items = (msg.items as RecItem[]) ?? [];
           onRecRef.current?.(mapRecItems(items));
           onRecLoadingRef.current?.(false);
+
         } else if (type === "assistant_text_delta") {
-          if (!playbackMatchesTurn(msg, false)) return;
+          if (!isTurnAlive(msg.turn_id)) return;
           const delta = String(msg.text ?? "");
           const lineId = assistantLineIdRef.current;
           if (!lineId) return;
@@ -323,11 +390,16 @@ export function KellnerVoicePanel({
             })
           );
           setStatus("Speaking…");
+
         } else if (type === "audio_delta") {
-          if (!playbackMatchesTurn(msg, true)) return;
+          // Layer 1: discard set
+          const tid = Number(msg.turn_id);
+          if (discardedTurnIdsRef.current.has(tid)) return;
+          if (!isTurnAlive(msg.turn_id)) return;
           assistantSpeakingRef.current = true;
           bargeInAllowedAfterRef.current = performance.now() + 1400;
-          await playPcmB64(String(msg.b64 ?? ""), Number(msg.turn_id));
+          playPcmB64(String(msg.b64 ?? ""), tid);
+
         } else if (type === "done") {
           setLivePartial("");
           assistantSpeakingRef.current = false;
@@ -339,15 +411,20 @@ export function KellnerVoicePanel({
             );
           }
           assistantLineIdRef.current = null;
-          if (!activeSourcesRef.current.length) setStatus("Listening…");
+          setStatus("Listening…");
+
         } else if (type === "interrupted") {
+          // Server confirmed interrupt — add turn_id to discard set + flush
           setLivePartial("");
+          const tid = Number(msg.turn_id);
+          if (Number.isFinite(tid)) discardedTurnIdsRef.current.add(tid);
           playbackTurnIdRef.current = null;
-          stopAllPlayback();
+          flushAssistantAudio();
           assistantSpeakingRef.current = false;
           assistantLineIdRef.current = null;
           onRecLoadingRef.current?.(false);
           setStatus("Listening…");
+
         } else if (type === "error") {
           const lineId = assistantLineIdRef.current;
           if (lineId) {
@@ -369,10 +446,7 @@ export function KellnerVoicePanel({
       clearTimeout(connectTimer);
       stopVoiceCapture();
       playbackTurnIdRef.current = null;
-      activeSourcesRef.current.forEach((s) => {
-        try { s.stop(); } catch { /* already stopped */ }
-      });
-      activeSourcesRef.current = [];
+      flushAssistantAudio();
       if (audioCtxRef.current) {
         audioCtxRef.current.close().catch(() => {});
         audioCtxRef.current = null;
@@ -390,7 +464,7 @@ export function KellnerVoicePanel({
     listRef.current?.scrollTo({ top: listRef.current.scrollHeight, behavior: "smooth" });
   }, [lines]);
 
-  async function startVoiceChat() {
+  async function startVoiceChat(opts?: { sendGuestGreeting?: boolean }) {
     const ws = wsRef.current;
     if (!ws || ws.readyState !== WebSocket.OPEN || voiceActiveRef.current) return;
     try {
@@ -407,6 +481,9 @@ export function KellnerVoicePanel({
       await ctx.resume();
 
       ws.send(JSON.stringify({ type: "voice_session" }));
+      if (opts?.sendGuestGreeting) {
+        ws.send(JSON.stringify({ type: "guest_greeting" }));
+      }
 
       const source = ctx.createMediaStreamSource(stream);
 
@@ -478,12 +555,26 @@ export function KellnerVoicePanel({
       setVoiceActive(true);
       setStartDisabled(true);
       setStatus("Listening… speak naturally");
+      setGuestAutostartFailed(false);
     } catch {
       setStatus("Microphone access denied");
+      if (opts?.sendGuestGreeting) setGuestAutostartFailed(true);
     }
   }
 
+  const guestAutoStartDoneRef = useRef(false);
+  useEffect(() => {
+    if (variant !== "guest" || !autoStartVoiceSession || !connected || guestAutoStartDoneRef.current) return;
+    guestAutoStartDoneRef.current = true;
+    setStatus("Starting…");
+    void startVoiceChat({ sendGuestGreeting: true });
+    // startVoiceChat is stable enough for this one-shot; deps are the gate.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [connected, variant, autoStartVoiceSession]);
+
   const guest = variant === "guest";
+  /** Hide “Start session” while guest autostart is in progress or succeeded; show again if mic was denied. */
+  const showGuestStartButton = !guest || !autoStartVoiceSession || guestAutostartFailed;
 
   return (
     <section
@@ -527,14 +618,16 @@ export function KellnerVoicePanel({
         </div>
       )}
       <div className={`kellner-voice-actions ${guest ? "kellner-voice-actions--guest" : ""}`}>
+        {showGuestStartButton ? (
         <button
           type="button"
           className="kellner-voice-start"
           disabled={startDisabled || !connected}
-          onClick={startVoiceChat}
+          onClick={() => void startVoiceChat()}
         >
           {guest ? "Start session" : "Start voice chat"}
         </button>
+        ) : null}
         <button
           type="button"
           className={`kellner-voice-mic ${micMuted ? "is-muted" : ""}`}

@@ -1,21 +1,22 @@
 import { useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
+import { useLocation } from "react-router-dom";
 import type { MenuSuggestion } from "../types";
 import { VoiceOrb } from "../components/VoiceOrb";
 import { MenuSuggestionCards } from "../components/MenuSuggestionCards";
 import { KellnerVoicePanel } from "../components/KellnerVoicePanel";
 import "./GuestVoicePage.css";
 
+type GuestVoiceLocationState = { startVoiceSession?: boolean };
+
 export default function GuestVoicePage() {
-  const [search] = useSearchParams();
-  const hotelQ = search.get("hotel_id");
-  const guestHome = hotelQ ? `/guest?hotel_id=${encodeURIComponent(hotelQ)}` : "/guest";
+  const location = useLocation();
+  const autoStartVoiceSession =
+    (location.state as GuestVoiceLocationState | null)?.startVoiceSession === true;
   const [suggestions, setSuggestions] = useState<MenuSuggestion[]>([]);
   const [hasAskedForSuggestions, setHasAskedForSuggestions] = useState(false);
   const [recommendationsLoading, setRecommendationsLoading] = useState(false);
   const [micLive, setMicLive] = useState(false);
   const [phaseLabel, setPhaseLabel] = useState("Connecting…");
-  const [apiConnected, setApiConnected] = useState(false);
   const [audioBands, setAudioBands] = useState<[number, number, number, number]>([0, 0, 0, 0]);
 
   const emptySuggestionMessage = hasAskedForSuggestions
@@ -31,16 +32,6 @@ export default function GuestVoicePage() {
             src="/real.png"
             alt="Kellner"
           />
-        </div>
-        <div className="guest-header-right">
-          <span
-            className={`guest-conn-dot ${apiConnected ? "is-on" : ""}`}
-            title={apiConnected ? "Assistant connected" : "Connecting…"}
-            aria-label={apiConnected ? "Assistant connected" : "Not connected"}
-          />
-          <Link className="guest-link-kitchen" to={guestHome}>
-            Back
-          </Link>
         </div>
       </header>
 
@@ -60,6 +51,7 @@ export default function GuestVoicePage() {
 
           <KellnerVoicePanel
             variant="guest"
+            autoStartVoiceSession={autoStartVoiceSession}
             onRecommendations={(items) => {
               setSuggestions(items);
             }}
@@ -69,7 +61,6 @@ export default function GuestVoicePage() {
             }}
             onVoiceActiveChange={setMicLive}
             onPhaseLabelChange={setPhaseLabel}
-            onConnectionChange={setApiConnected}
             onAudioBands={setAudioBands}
           />
         </section>

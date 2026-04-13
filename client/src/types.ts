@@ -91,7 +91,16 @@ export type MenuSuggestion = {
   info: string;
 };
 
-/** Kitchen menu row — POST /api/fetch_menu response `items` */
+/** Kitchen menu editor — GET /api/kitchen/fetch_menu, POST /api/kitchen/save_menu */
+export type KitchenMenuItem = {
+  dish_id: number;
+  name: string;
+  price: number | null;
+  available: boolean;
+};
+
+export type KitchenNavTab = "home" | "orders" | "menu";
+/** Kitchen menu row from GET /api/kitchen/fetch_menu (FastAPI). */
 export type KitchenMenuItem = {
   dish_id: number;
   name: string;
@@ -99,4 +108,3 @@ export type KitchenMenuItem = {
   available: boolean;
 };
 
-export type KitchenNavTab = "home" | "orders" | "menu";

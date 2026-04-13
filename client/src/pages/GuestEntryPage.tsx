@@ -231,7 +231,7 @@ export default function GuestEntryPage() {
   const continueWithoutSignIn = useCallback(() => {
     clearGuestCustomerId();
     const q = hotelId ? `?hotel_id=${encodeURIComponent(hotelId)}` : "";
-    navigate(`/guest/voice${q}`);
+    navigate(`/guest/voice${q}`, { state: { startVoiceSession: true } });
   }, [navigate, hotelId]);
 
   if (!session || session.role !== "device") {

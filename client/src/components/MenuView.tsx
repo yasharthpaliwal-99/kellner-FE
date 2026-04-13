@@ -96,7 +96,7 @@ export function MenuView({ hotelId, reloadToken }: Props) {
     try {
       const hid = Number(hotelId);
       if (!Number.isFinite(hid)) throw new Error("Invalid hotel id");
-      const r = await fetch(apiUrl("/api/fetch_menu"), {
+      const r = await fetch(apiUrl("/api/kitchen/fetch_menu"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -137,7 +137,7 @@ export function MenuView({ hotelId, reloadToken }: Props) {
     try {
       const hid = Number(hotelId);
       if (!Number.isFinite(hid)) throw new Error("Invalid hotel id");
-      const r = await fetch(apiUrl("/api/save_menu"), {
+      const r = await fetch(apiUrl("/api/kitchen/save_menu"), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
