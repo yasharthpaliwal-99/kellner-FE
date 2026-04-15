@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getKellnerWebSocketUrl } from "../lib/kellnerWs";
-import type { MenuSuggestion } from "../types";
+import type { MenuSuggestion, StructuredData } from "../types";
 import "./KellnerVoicePanel.css";
 
 const BARGE_RMS = 0.08;
@@ -47,6 +47,8 @@ type Props = {
   onPhaseLabelChange?: (label: string) => void;
   /** Fires on each animation frame with 4 frequency-band energy values [0-1] (bass → treble). */
   onAudioBands?: (bands: [number, number, number, number]) => void;
+  /** Fires when a structured assistant message arrives (bill / order_confirmation / recommendations). */
+  onStructured?: (data: StructuredData) => void;
   /** default = full panel; guest = tighter layout, no duplicate status line */
   variant?: "default" | "guest";
   onConnectionChange?: (connected: boolean) => void;
@@ -73,6 +75,7 @@ export function KellnerVoicePanel({
   onVoiceActiveChange,
   onPhaseLabelChange,
   onAudioBands,
+  onStructured,
   onConnectionChange,
   variant = "default",
 }: Props) {
@@ -126,6 +129,8 @@ export function KellnerVoicePanel({
   const rafIdRef = useRef<number | null>(null);
   const onAudioBandsRef = useRef(onAudioBands);
   useEffect(() => { onAudioBandsRef.current = onAudioBands; }, [onAudioBands]);
+  const onStructuredRef = useRef(onStructured);
+  useEffect(() => { onStructuredRef.current = onStructured; }, [onStructured]);
   const voiceActiveRef = useRef(false);
   const playbackTurnIdRef = useRef<number | null>(null);
   const assistantLineIdRef = useRef<string | null>(null);
@@ -308,6 +313,13 @@ export function KellnerVoicePanel({
           if (Number(msg.turn_id) !== Number(playbackTurnIdRef.current)) return;
           const items = (msg.items as RecItem[]) ?? [];
           onRecRef.current?.(mapRecItems(items));
+          onRecLoadingRef.current?.(false);
+        } else if (type === "assistant_structured") {
+          const mode = String(msg.mode ?? "");
+          const payload = msg.payload as Record<string, unknown>;
+          if (mode === "bill" || mode === "order_confirmation" || mode === "recommendations") {
+            onStructuredRef.current?.({ mode, payload } as StructuredData);
+          }
           onRecLoadingRef.current?.(false);
         } else if (type === "assistant_text_delta") {
           if (!playbackMatchesTurn(msg, false)) return;

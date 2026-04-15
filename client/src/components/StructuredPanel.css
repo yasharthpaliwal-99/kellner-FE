@@ -1,0 +1,298 @@
+/* Shared entry animation */
+@keyframes sp-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ─── Shared card shell ────────────────────────────────────────────────────── */
+.sp-card {
+  border-radius: 20px;
+  border: 1px solid var(--border-soft);
+  background: #fff;
+  box-shadow: 0 8px 28px rgba(2, 6, 23, 0.07);
+  padding: 1.25rem 1.3rem;
+  width: 100%;
+  animation: sp-enter 0.28s ease both;
+}
+
+/* Tiny muted uppercase label */
+.sp-label {
+  display: block;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 0.1rem;
+}
+
+/* ─── Bill ─────────────────────────────────────────────────────────────────── */
+.sp-bill-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+}
+
+.sp-bill-icon {
+  color: var(--muted);
+  opacity: 0.55;
+  flex-shrink: 0;
+}
+
+.sp-bill-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.sp-bill-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  align-items: baseline;
+  gap: 0.6rem;
+}
+
+.sp-bill-name {
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: #1e293b;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sp-bill-qty {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.sp-bill-price {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.sp-bill-divider {
+  height: 1px;
+  background: var(--border-soft);
+  margin: 1rem 0 0.9rem;
+}
+
+.sp-bill-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sp-bill-total-label {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #0f172a;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.sp-bill-total-amount {
+  font-size: 1.25rem;
+  font-weight: 800;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* ─── Order Confirmation ───────────────────────────────────────────────────── */
+.sp-confirm {
+  background: linear-gradient(145deg, #f0fdf4, #ffffff 55%);
+  border-color: rgba(34, 197, 94, 0.22);
+}
+
+.sp-confirm-top {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  margin-bottom: 1.1rem;
+}
+
+.sp-confirm-check {
+  width: 2.4rem;
+  height: 2.4rem;
+  border-radius: 50%;
+  background: #22c55e;
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  /* Draw the checkmark in */
+  animation: sp-check-pop 0.38s cubic-bezier(0.34, 1.56, 0.64, 1) both 0.1s;
+}
+
+@keyframes sp-check-pop {
+  from {
+    transform: scale(0);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.sp-confirm-check svg {
+  stroke-dasharray: 28;
+  stroke-dashoffset: 28;
+  animation: sp-check-draw 0.32s ease forwards 0.3s;
+}
+
+@keyframes sp-check-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.sp-confirm-title {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 800;
+  color: #15803d;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+}
+
+.sp-confirm-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.sp-confirm-row {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+}
+
+.sp-confirm-dot {
+  width: 0.38rem;
+  height: 0.38rem;
+  border-radius: 50%;
+  background: #22c55e;
+  flex-shrink: 0;
+}
+
+.sp-confirm-name {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #1e293b;
+  flex: 1;
+}
+
+.sp-confirm-qty {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ─── Structured Recommendations ──────────────────────────────────────────── */
+.sp-recs {
+  display: flex;
+  flex-direction: column;
+  gap: 0.7rem;
+  animation: sp-enter 0.28s ease both;
+}
+
+.sp-recs-focus {
+  margin: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--muted);
+}
+
+.sp-recs-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.sp-rec-card {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  border-radius: 14px;
+  border: 1px solid var(--border-soft);
+  background: #fff;
+  padding: 0.75rem 0.9rem;
+  box-shadow: 0 4px 14px rgba(2, 6, 23, 0.05);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.sp-rec-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(2, 6, 23, 0.1);
+}
+
+.sp-rec-rank {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  background: rgba(15, 23, 42, 0.07);
+  padding: 0.18rem 0.46rem;
+  border-radius: 999px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.sp-rec-body {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.sp-rec-name {
+  font-size: 0.92rem;
+  font-weight: 700;
+  color: #0f172a;
+  letter-spacing: -0.01em;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sp-rec-price {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  flex-shrink: 0;
+}

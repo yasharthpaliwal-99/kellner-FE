@@ -90,3 +90,30 @@ export type MenuSuggestion = {
   currency: string;
   info: string;
 };
+
+// ── assistant_structured payload shapes ──────────────────────────────────────
+
+export type StructuredBillItem = { name: string; quantity: number; price: number | null };
+
+export type StructuredBillPayload = {
+  items: StructuredBillItem[];
+  total: number | null;
+};
+
+export type StructuredOrderItem = { name: string; quantity: number };
+
+export type StructuredOrderConfirmationPayload = {
+  items: StructuredOrderItem[];
+};
+
+export type StructuredRecItem = { name: string; quantity: number; price: number | null };
+
+export type StructuredRecommendationsPayload = {
+  recommendation_focus: string;
+  items: StructuredRecItem[];
+};
+
+export type StructuredData =
+  | { mode: "bill"; payload: StructuredBillPayload }
+  | { mode: "order_confirmation"; payload: StructuredOrderConfirmationPayload }
+  | { mode: "recommendations"; payload: StructuredRecommendationsPayload };

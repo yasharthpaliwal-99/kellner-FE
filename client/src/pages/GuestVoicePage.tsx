@@ -1,9 +1,10 @@
 import { useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import type { MenuSuggestion } from "../types";
+import type { MenuSuggestion, StructuredData } from "../types";
 import { VoiceOrb } from "../components/VoiceOrb";
 import { MenuSuggestionCards } from "../components/MenuSuggestionCards";
 import { KellnerVoicePanel } from "../components/KellnerVoicePanel";
+import { StructuredPanel } from "../components/StructuredPanel";
 import "./GuestVoicePage.css";
 
 export default function GuestVoicePage() {
@@ -17,6 +18,7 @@ export default function GuestVoicePage() {
   const [phaseLabel, setPhaseLabel] = useState("Connecting…");
   const [apiConnected, setApiConnected] = useState(false);
   const [audioBands, setAudioBands] = useState<[number, number, number, number]>([0, 0, 0, 0]);
+  const [structured, setStructured] = useState<StructuredData | null>(null);
 
   const emptySuggestionMessage = hasAskedForSuggestions
     ? "Your suggestions will appear "
@@ -66,6 +68,7 @@ export default function GuestVoicePage() {
             variant="guest"
             onRecommendations={(items) => {
               setSuggestions(items);
+              setStructured(null);
             }}
             onRecommendationsLoadingChange={(loading) => {
               if (loading) setHasAskedForSuggestions(true);
@@ -75,16 +78,34 @@ export default function GuestVoicePage() {
             onPhaseLabelChange={setPhaseLabel}
             onConnectionChange={setApiConnected}
             onAudioBands={setAudioBands}
+            onStructured={(data) => {
+              setStructured(data);
+              // recommendations via structured path — clear the old card list
+              if (data.mode === "recommendations") setSuggestions([]);
+            }}
           />
         </section>
 
-        <aside className="guest-suggestions" aria-label="Suggestions from your assistant">
-          <h2 className="guest-suggestions-title">Suggestions</h2>
-          <MenuSuggestionCards
-            items={suggestions}
-            loading={recommendationsLoading}
-            emptyMessage={emptySuggestionMessage}
-          />
+        <aside className="guest-suggestions" aria-label="Assistant panel">
+          {structured ? (
+            <>
+              <h2 className="guest-suggestions-title">
+                {structured.mode === "bill" && "Bill"}
+                {structured.mode === "order_confirmation" && "Order"}
+                {structured.mode === "recommendations" && "Suggestions"}
+              </h2>
+              <StructuredPanel data={structured} />
+            </>
+          ) : (
+            <>
+              <h2 className="guest-suggestions-title">Suggestions</h2>
+              <MenuSuggestionCards
+                items={suggestions}
+                loading={recommendationsLoading}
+                emptyMessage={emptySuggestionMessage}
+              />
+            </>
+          )}
         </aside>
       </main>
     </div>
