@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { apiUrl } from "../lib/api";
 import { getAuthSession } from "../lib/authSession";
 import type { KitchenMenuItem } from "../types";
@@ -52,7 +52,10 @@ function normalizeRow(row: unknown): KitchenMenuItem | null {
     price = Number.isFinite(n) ? n : null;
   }
   const available = Boolean(r.available);
-  return { dish_id, name, price, available };
+  const rawImg = r.image;
+  const image =
+    typeof rawImg === "string" && rawImg.trim() ? rawImg.trim() : null;
+  return { dish_id, name, price, available, ...(image ? { image } : {}) };
 }
 
 /** `fetch_menu` response: `{ ok, hotel_id, items: [...] }` */
@@ -88,6 +91,9 @@ export function MenuView({ hotelId, reloadToken }: Props) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveOk, setSaveOk] = useState<string | null>(null);
+  const [uploadingDishId, setUploadingDishId] = useState<number | null>(null);
+  const imageFileInputRef = useRef<HTMLInputElement | null>(null);
+  const pendingUploadDishIdRef = useRef<number | null>(null);
 
   const loadMenu = useCallback(async () => {
     setError(null);
@@ -128,6 +134,51 @@ export function MenuView({ hotelId, reloadToken }: Props) {
   const setAvailable = (dishId: number, available: boolean) => {
     setSaveOk(null);
     setItems((prev) => prev.map((row) => (row.dish_id === dishId ? { ...row, available } : row)));
+  };
+
+  const uploadMenuImage = async (dishId: number, file: File) => {
+    setError(null);
+    setSaveOk(null);
+    const hid = Number(hotelId);
+    if (!Number.isFinite(hid)) throw new Error("Invalid hotel id");
+    const fd = new FormData();
+    fd.append("hotel_id", String(hid));
+    fd.append("dish_id", String(dishId));
+    fd.append("image", file);
+    const r = await fetch(apiUrl("/api/upload_menu_image"), {
+      method: "POST",
+      headers: authHeaders(),
+      body: fd,
+    });
+    await assertOk(r, "Could not upload image");
+    const data = (await r.json().catch(() => ({}))) as Record<string, unknown>;
+    assertBodyOk(data, "Could not upload image");
+    const itemRaw = data.item;
+    const updated = normalizeRow(itemRaw);
+    if (!updated) throw new Error("Invalid response item");
+    setItems((prev) =>
+      prev.map((row) => (row.dish_id === updated.dish_id ? { ...row, ...updated } : row))
+    );
+    setSaveOk("Image updated.");
+  };
+
+  const onPickImageClick = (dishId: number) => {
+    pendingUploadDishIdRef.current = dishId;
+    imageFileInputRef.current?.click();
+  };
+
+  const onImageFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    const dishId = pendingUploadDishIdRef.current;
+    e.target.value = "";
+    pendingUploadDishIdRef.current = null;
+    if (!file || dishId == null) return;
+    setUploadingDishId(dishId);
+    void uploadMenuImage(dishId, file)
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : "Upload failed");
+      })
+      .finally(() => setUploadingDishId(null));
   };
 
   const save = async () => {
@@ -206,12 +257,21 @@ export function MenuView({ hotelId, reloadToken }: Props) {
 
       {!loading && items.length > 0 ? (
         <div className="menu-table-wrap">
+          <input
+            ref={imageFileInputRef}
+            type="file"
+            accept="image/*"
+            className="sr-only"
+            aria-hidden
+            onChange={onImageFileChange}
+          />
           <table className="menu-table">
             <thead>
               <tr>
                 <th scope="col">Dish</th>
                 <th scope="col">ID</th>
                 <th scope="col">Price</th>
+                <th scope="col">Photo</th>
                 <th scope="col">Available</th>
               </tr>
             </thead>
@@ -221,6 +281,25 @@ export function MenuView({ hotelId, reloadToken }: Props) {
                   <td className="menu-col-name">{row.name}</td>
                   <td className="menu-col-id">{row.dish_id}</td>
                   <td className="menu-col-price">{formatPrice(row.price)}</td>
+                  <td className="menu-col-image">
+                    <div className="menu-image-cell">
+                      {row.image ? (
+                        <img src={row.image} alt="" className="menu-dish-thumb" />
+                      ) : null}
+                      <button
+                        type="button"
+                        className="menu-upload-btn"
+                        disabled={uploadingDishId === row.dish_id}
+                        onClick={() => onPickImageClick(row.dish_id)}
+                      >
+                        {uploadingDishId === row.dish_id
+                          ? "Uploading…"
+                          : row.image
+                            ? "Change image"
+                            : "Add image"}
+                      </button>
+                    </div>
+                  </td>
                   <td className="menu-col-toggle">
                     <label className="menu-toggle">
                       <input

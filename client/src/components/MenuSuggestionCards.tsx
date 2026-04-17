@@ -49,7 +49,7 @@ export function MenuSuggestionCards({ items, loading, emptyMessage }: Props) {
       <div className="menu-suggestion-cards" role="status" aria-live="polite">
         <article className="menu-suggestion-card is-empty">
           <p className="menu-card-empty-state">
-            {emptyMessage ?? "Hi there! What would you like to have today?"}
+            {emptyMessage ?? "No suggestions right now."}
           </p>
         </article>
       </div>
@@ -70,7 +70,7 @@ export function MenuSuggestionCards({ items, loading, emptyMessage }: Props) {
             <span className="menu-card-price">{formatPrice(item.price, item.currency)}</span>
           </header>
           <p className="menu-card-info">
-            {item.info?.trim() ? item.info : "Ask Kellner for details or to add this to your order."}
+            {item.info?.trim() ? item.info : "—"}
           </p>
         </article>
       ))}

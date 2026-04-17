@@ -129,6 +129,51 @@
   width: 7rem;
 }
 
+.menu-col-image {
+  width: 11rem;
+  vertical-align: middle;
+}
+
+.menu-image-cell {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.menu-dish-thumb {
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 8px;
+  object-fit: cover;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  flex-shrink: 0;
+}
+
+.menu-upload-btn {
+  border: 1px solid var(--border-soft);
+  background: var(--surface);
+  color: var(--logo-black);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 0.35rem 0.55rem;
+  border-radius: 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, opacity 0.15s;
+}
+
+.menu-upload-btn:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.menu-upload-btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
 .menu-col-toggle {
   width: 8.5rem;
 }
@@ -225,6 +270,20 @@
     content: "Price ";
     color: var(--muted);
     font-size: 0.8rem;
+  }
+
+  .menu-col-image {
+    width: 100%;
+    padding-top: 0.75rem !important;
+  }
+
+  .menu-col-image::before {
+    content: "Photo ";
+    color: var(--muted);
+    font-size: 0.8rem;
+    font-weight: 600;
+    display: block;
+    margin-bottom: 0.35rem;
   }
 
   .menu-col-toggle {

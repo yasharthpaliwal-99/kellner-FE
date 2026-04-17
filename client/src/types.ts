@@ -91,20 +91,15 @@ export type MenuSuggestion = {
   info: string;
 };
 
-/** Kitchen menu editor — GET /api/kitchen/fetch_menu, POST /api/kitchen/save_menu */
-export type KitchenMenuItem = {
-  dish_id: number;
-  name: string;
-  price: number | null;
-  available: boolean;
-};
-
 export type KitchenNavTab = "home" | "orders" | "menu";
-/** Kitchen menu row from GET /api/kitchen/fetch_menu (FastAPI). */
+
+/** Kitchen menu editor — fetch_menu / save_menu / upload_menu_image */
 export type KitchenMenuItem = {
   dish_id: number;
   name: string;
   price: number | string | null;
   available: boolean;
+  /** Set after POST /api/upload_menu_image */
+  image?: string | null;
 };
 

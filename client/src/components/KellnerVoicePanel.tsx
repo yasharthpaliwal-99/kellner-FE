@@ -13,6 +13,12 @@ type ConvLine = {
 };
 
 type RecItem = { name?: string; price?: number | string | null; info?: string };
+type ReplyMode = "none" | "bill" | "order_confirmation" | "recommendations";
+type StructuredPayload = {
+  recommendation_focus?: string;
+  items?: Array<RecItem & { quantity?: number | string | null }>;
+  total?: number | string | null;
+};
 
 function nextId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -50,6 +56,8 @@ type Props = {
   /** default = full panel; guest = tighter layout, no duplicate status line */
   variant?: "default" | "guest";
   onConnectionChange?: (connected: boolean) => void;
+  onReplyModeChange?: (mode: ReplyMode) => void;
+  onStructuredPayload?: (mode: ReplyMode, payload: unknown) => void;
   /**
    * Guest: when true (e.g. navigated from “Call waiter”), connect then start mic automatically
    * and send `{ type: "guest_greeting" }` after `voice_session` so the backend can open with a welcome line.
@@ -80,6 +88,8 @@ export function KellnerVoicePanel({
   onPhaseLabelChange,
   onAudioBands,
   onConnectionChange,
+  onReplyModeChange,
+  onStructuredPayload,
   variant = "default",
   autoStartVoiceSession = false,
 }: Props) {
@@ -115,6 +125,14 @@ export function KellnerVoicePanel({
   useEffect(() => {
     onPhaseRef.current = onPhaseLabelChange;
   }, [onPhaseLabelChange]);
+  const onReplyModeRef = useRef(onReplyModeChange);
+  useEffect(() => {
+    onReplyModeRef.current = onReplyModeChange;
+  }, [onReplyModeChange]);
+  const onStructuredPayloadRef = useRef(onStructuredPayload);
+  useEffect(() => {
+    onStructuredPayloadRef.current = onStructuredPayload;
+  }, [onStructuredPayload]);
 
   useEffect(() => {
     onPhaseRef.current?.(phaseLabelFromStatus(status));
@@ -144,6 +162,8 @@ export function KellnerVoicePanel({
   const playbackTurnIdRef = useRef<number | null>(null);
   const assistantLineIdRef = useRef<string | null>(null);
   const assistantSpeakingRef = useRef(false);
+  const currentReplyModeRef = useRef<ReplyMode>("none");
+  const replyModeByTurnRef = useRef<Map<number, ReplyMode>>(new Map());
   const nextPlayTimeRef = useRef(0);
   const bargeInAllowedAfterRef = useRef(0);
   const listRef = useRef<HTMLDivElement | null>(null);
@@ -285,6 +305,41 @@ export function KellnerVoicePanel({
     }));
   }
 
+  function applyStructuredPayload(turnId: number, payload: unknown) {
+    const mode = replyModeByTurnRef.current.get(turnId) ?? currentReplyModeRef.current;
+    onStructuredPayloadRef.current?.(mode, payload);
+    if (!payload || typeof payload !== "object") return;
+    const p = payload as StructuredPayload;
+    if (!Array.isArray(p.items)) return;
+    if (mode === "recommendations") {
+      onRecRef.current?.(mapRecItems(p.items));
+      onRecLoadingRef.current?.(false);
+      return;
+    }
+    if (mode === "order_confirmation") {
+      const asSuggestions: MenuSuggestion[] = p.items.map((it) => {
+        const quantity =
+          typeof it.quantity === "number" ? it.quantity : Number(it.quantity ?? 1);
+        const safeQty = Number.isFinite(quantity) && quantity > 0 ? quantity : 1;
+        const price =
+          typeof it.price === "number"
+            ? it.price
+            : it.price != null && it.price !== ""
+              ? Number(it.price)
+              : null;
+        return {
+          dish_id: null,
+          name: it.name ?? "Item",
+          price: Number.isFinite(price as number) ? (price as number) : null,
+          currency: "USD",
+          info: `Quantity: ${safeQty}`,
+        };
+      });
+      onRecRef.current?.(asSuggestions);
+    }
+    onRecLoadingRef.current?.(false);
+  }
+
   function stopVoiceCapture() {
     voiceActiveRef.current = false;
     setVoiceActive(false);
@@ -360,6 +415,9 @@ export function KellnerVoicePanel({
           flushAssistantAudio();
           // New logical turn — clear old discard entries (memory bound)
           discardedTurnIdsRef.current.clear();
+          currentReplyModeRef.current = "none";
+          replyModeByTurnRef.current.clear();
+          onReplyModeRef.current?.("none");
           const tid = Number(msg.turn_id);
           playbackTurnIdRef.current = Number.isFinite(tid) ? tid : null;
           onRecLoadingRef.current?.(true);
@@ -370,6 +428,20 @@ export function KellnerVoicePanel({
           setLines((prev) => [...prev, { id: aid, role: "assistant", text: "…", streaming: true }]);
           setStatus("Thinking…");
           assistantSpeakingRef.current = false;
+
+        } else if (type === "assistant_reply_mode") {
+          const tid = Number(msg.turn_id);
+          const mode = String(msg.mode ?? "none") as ReplyMode;
+          if (!Number.isFinite(tid)) return;
+          currentReplyModeRef.current = mode;
+          replyModeByTurnRef.current.set(tid, mode);
+          onReplyModeRef.current?.(mode);
+
+        } else if (type === "assistant_structured") {
+          const tid = Number(msg.turn_id);
+          if (!Number.isFinite(tid)) return;
+          if (!isTurnAlive(tid)) return;
+          applyStructuredPayload(tid, msg.payload);
 
         } else if (type === "recommendations") {
           if (!isTurnAlive(msg.turn_id)) return;
@@ -402,6 +474,8 @@ export function KellnerVoicePanel({
 
         } else if (type === "done") {
           setLivePartial("");
+          const tid = Number(msg.turn_id);
+          if (Number.isFinite(tid)) replyModeByTurnRef.current.delete(tid);
           assistantSpeakingRef.current = false;
           onRecLoadingRef.current?.(false);
           const lineId = assistantLineIdRef.current;
@@ -417,7 +491,10 @@ export function KellnerVoicePanel({
           // Server confirmed interrupt — add turn_id to discard set + flush
           setLivePartial("");
           const tid = Number(msg.turn_id);
-          if (Number.isFinite(tid)) discardedTurnIdsRef.current.add(tid);
+          if (Number.isFinite(tid)) {
+            discardedTurnIdsRef.current.add(tid);
+            replyModeByTurnRef.current.delete(tid);
+          }
           playbackTurnIdRef.current = null;
           flushAssistantAudio();
           assistantSpeakingRef.current = false;
