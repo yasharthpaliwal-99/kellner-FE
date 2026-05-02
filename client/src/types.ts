@@ -89,6 +89,7 @@ export type MenuSuggestion = {
   price: number | null;
   currency: string;
   info: string;
+  image?: string | null;
 };
 
 export type KitchenNavTab = "home" | "orders" | "menu";

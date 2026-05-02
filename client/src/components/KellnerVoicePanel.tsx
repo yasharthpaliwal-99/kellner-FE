@@ -12,7 +12,12 @@ type ConvLine = {
   streaming?: boolean;
 };
 
-type RecItem = { name?: string; price?: number | string | null; info?: string };
+type RecItem = {
+  name?: string;
+  price?: number | string | null;
+  info?: string;
+  image?: string | null;
+};
 type ReplyMode = "none" | "bill" | "order_confirmation" | "recommendations";
 type StructuredPayload = {
   recommendation_focus?: string;
@@ -302,6 +307,7 @@ export function KellnerVoicePanel({
             : null,
       currency: "USD",
       info: it.info ?? "",
+      image: it.image ?? null,
     }));
   }
 
