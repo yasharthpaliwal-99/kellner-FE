@@ -89,31 +89,18 @@ export type MenuSuggestion = {
   price: number | null;
   currency: string;
   info: string;
+  image?: string | null;
 };
 
-// ── assistant_structured payload shapes ──────────────────────────────────────
+export type KitchenNavTab = "home" | "orders" | "menu";
 
-export type StructuredBillItem = { name: string; quantity: number; price: number | null };
-
-export type StructuredBillPayload = {
-  items: StructuredBillItem[];
-  total: number | null;
+/** Kitchen menu editor — fetch_menu / save_menu / upload_menu_image */
+export type KitchenMenuItem = {
+  dish_id: number;
+  name: string;
+  price: number | string | null;
+  available: boolean;
+  /** Set after POST /api/upload_menu_image */
+  image?: string | null;
 };
 
-export type StructuredOrderItem = { name: string; quantity: number };
-
-export type StructuredOrderConfirmationPayload = {
-  items: StructuredOrderItem[];
-};
-
-export type StructuredRecItem = { name: string; quantity: number; price: number | null };
-
-export type StructuredRecommendationsPayload = {
-  recommendation_focus: string;
-  items: StructuredRecItem[];
-};
-
-export type StructuredData =
-  | { mode: "bill"; payload: StructuredBillPayload }
-  | { mode: "order_confirmation"; payload: StructuredOrderConfirmationPayload }
-  | { mode: "recommendations"; payload: StructuredRecommendationsPayload };

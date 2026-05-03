@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import type { KitchenStats, Order } from "./types";
+import type { KitchenNavTab, KitchenStats, Order } from "./types";
 import { apiUrl } from "./lib/api";
 import { getAuthSession } from "./lib/authSession";
 import { Nav } from "./components/Nav";
 import { HomeView } from "./components/HomeView";
 import { OrderListView } from "./components/OrderListView";
+import { MenuView } from "./components/MenuView";
 import "./App.css";
-
-type Tab = "home" | "orders";
 
 const POLL_MS = 12_000;
 
@@ -51,7 +50,8 @@ async function assertOk(r: Response, label: string) {
 }
 
 export default function KitchenApp() {
-  const [tab, setTab] = useState<Tab>("home");
+  const [tab, setTab] = useState<KitchenNavTab>("home");
+  const [menuReloadToken, setMenuReloadToken] = useState(0);
   const [orders, setOrders] = useState<Order[]>([]);
   const [stats, setStats] = useState<KitchenStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -97,10 +97,21 @@ export default function KitchenApp() {
   }, [loadKitchen]);
 
   useEffect(() => {
-    refresh();
-    const id = setInterval(refresh, POLL_MS);
+    void refresh();
+    const id = setInterval(() => {
+      void refresh();
+    }, POLL_MS);
     return () => clearInterval(id);
   }, [refresh]);
+
+  const handleHeaderRefresh = () => {
+    void refresh();
+    if (tab === "menu") {
+      setMenuReloadToken((n) => n + 1);
+    }
+  };
+
+  const kitchenHotelId = getKitchenHotelId();
 
   const updateStatus = async (orderId: string, status: string) => {
     const r = await fetch(apiUrl(`/api/orders/${orderId}/status`), {
@@ -126,7 +137,7 @@ export default function KitchenApp() {
           />
           <p className="brand-sub">Kitchen display</p>
         </div>
-        <button type="button" className="btn-refresh" onClick={() => refresh()} disabled={loading}>
+        <button type="button" className="btn-refresh" onClick={handleHeaderRefresh} disabled={loading}>
           Refresh
         </button>
       </header>
@@ -156,6 +167,12 @@ export default function KitchenApp() {
             loading={loading}
             onUpdateStatus={updateStatus}
           />
+        )}
+        {tab === "menu" && kitchenHotelId && (
+          <MenuView hotelId={kitchenHotelId} reloadToken={menuReloadToken} />
+        )}
+        {tab === "menu" && !kitchenHotelId && (
+          <p className="muted">Missing hotel: add ?hotel_id=… to the URL or set VITE_HOTEL_ID in client/.env</p>
         )}
       </main>
 

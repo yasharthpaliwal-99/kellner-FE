@@ -1,10 +1,13 @@
 .nav-pill {
   display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: center;
   padding: 4px;
   border-radius: 999px;
   background: var(--gradient);
   gap: 4px;
   box-shadow: var(--shadow);
+  max-width: 100%;
 }
 
 .nav-item {
@@ -12,10 +15,10 @@
   background: transparent;
   color: rgba(255, 255, 255, 0.92);
   font-weight: 700;
-  font-size: 0.78rem;
+  font-size: 0.72rem;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  padding: 0.55rem 1.35rem;
+  padding: 0.55rem 1.1rem;
   border-radius: 999px;
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
