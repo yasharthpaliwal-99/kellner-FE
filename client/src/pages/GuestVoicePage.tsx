@@ -4,6 +4,7 @@ import type { MenuSuggestion } from "../types";
 import { VoiceOrb } from "../components/VoiceOrb";
 import { MenuSuggestionCards } from "../components/MenuSuggestionCards";
 import { KellnerVoicePanel } from "../components/KellnerVoicePanel";
+import { FullMenuModal } from "../components/FullMenuModal";
 import "./GuestVoicePage.css";
 
 type GuestVoiceLocationState = { startVoiceSession?: boolean };
@@ -59,6 +60,7 @@ export default function GuestVoicePage() {
   const [audioBands, setAudioBands] = useState<[number, number, number, number]>([0, 0, 0, 0]);
   const [replyMode, setReplyMode] = useState<ReplyMode>("none");
   const [structuredPayload, setStructuredPayload] = useState<unknown>(null);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const emptySuggestionMessage = hasAskedForSuggestions
     ? "Sorry, we could not find matching suggestions right now."
@@ -139,7 +141,16 @@ export default function GuestVoicePage() {
         </section>
 
         <aside className="guest-suggestions" aria-label="Suggestions from your assistant">
-          <h2 className="guest-suggestions-title">{panelTitle}</h2>
+          <div className="guest-suggestions-titlebar">
+            <h2 className="guest-suggestions-title">{panelTitle}</h2>
+            <button
+              className="guest-view-menu-btn"
+              type="button"
+              onClick={() => setMenuOpen(true)}
+            >
+              View full menu
+            </button>
+          </div>
           {showOrderCard ? (
             <article className="guest-structured-card" aria-live="polite">
               <header className="guest-structured-head">
@@ -222,6 +233,7 @@ export default function GuestVoicePage() {
           )}
         </aside>
       </main>
+      <FullMenuModal open={menuOpen} onClose={() => setMenuOpen(false)} />
     </div>
   );
 }

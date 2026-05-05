@@ -99,13 +99,42 @@
   }
 }
 
+.guest-suggestions-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+  gap: 0.5rem;
+}
+
 .guest-suggestions-title {
-  margin: 0 0 0.75rem;
+  margin: 0;
   font-size: 0.8rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--muted);
+}
+
+.guest-view-menu-btn {
+  flex-shrink: 0;
+  padding: 0.3rem 0.75rem;
+  border-radius: 999px;
+  border: 1px solid var(--border-soft);
+  background: transparent;
+  font-family: inherit;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--logo-black);
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+
+.guest-view-menu-btn:hover {
+  background: rgba(0, 0, 0, 0.05);
+  border-color: var(--border);
 }
 
 .guest-suggestions .menu-suggestion-card {
