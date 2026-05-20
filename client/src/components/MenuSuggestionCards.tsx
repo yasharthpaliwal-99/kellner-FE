@@ -1,20 +1,9 @@
 import { useState } from "react";
+import { formatAmount } from "../lib/formatAmount";
 import type { MenuSuggestion } from "../types";
 import "./MenuSuggestionCards.css";
 
 const SLOT_COUNT = 4;
-
-function formatPrice(price: number | null, currency: string) {
-  if (price == null || Number.isNaN(price)) return "—";
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency: currency || "USD",
-    }).format(price);
-  } catch {
-    return `${price}`;
-  }
-}
 
 type Props = {
   items: MenuSuggestion[];
@@ -26,6 +15,7 @@ function SuggestionCard({ item }: { item: MenuSuggestion }) {
   const [imgFailed, setImgFailed] = useState(false);
   const url = item.image?.trim();
   const showPhoto = Boolean(url) && !imgFailed;
+  const info = item.info?.trim();
 
   return (
     <article className="menu-suggestion-card has-item" role="listitem">
@@ -49,12 +39,9 @@ function SuggestionCard({ item }: { item: MenuSuggestion }) {
       <div className="menu-card-body">
         <header className="menu-card-head">
           <h3 className="menu-card-name">{item.name}</h3>
-          <span className="menu-card-price">{formatPrice(item.price, item.currency)}</span>
+          <span className="menu-card-price">{formatAmount(item.price)}</span>
         </header>
-
-        <p className="menu-card-info">
-          {item.info?.trim() ? item.info : "—"}
-        </p>
+        {info ? <p className="menu-card-info">{info}</p> : null}
       </div>
     </article>
   );

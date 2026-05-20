@@ -5,6 +5,10 @@ export type LineItem = {
   quantity: number;
   unit_price: number;
   line_total: number;
+  /** mild | low | medium | high when table sets spice via order-ops */
+  spice_level?: string | null;
+  /** Kitchen line workflow: queued | preparing | cooking | arriving | ready | served */
+  dish_status?: string | null;
 };
 
 export type OrderEvent = {
@@ -22,6 +26,13 @@ export type OrderReview = {
 
 export type OrderBilling = {
   bill_requested_at: string | null;
+};
+
+/** Guest service notes on the order document; include on GET /api/kitchen for kitchen Alerts. */
+export type OrderServiceRequest = {
+  id?: string | null;
+  text?: string | null;
+  created_at?: string | null;
 };
 
 export type Order = {
@@ -47,6 +58,8 @@ export type Order = {
   feedback?: string | null;
   review?: OrderReview | null;
   billing?: OrderBilling | null;
+  /** Table / cutlery notes — same poll as order cards when backend adds this to GET /api/kitchen. */
+  requests?: OrderServiceRequest[] | null;
 };
 
 /** GET /api/kitchen stats block (aligned with FastAPI). */
@@ -92,7 +105,25 @@ export type MenuSuggestion = {
   image?: string | null;
 };
 
-export type KitchenNavTab = "home" | "orders" | "menu";
+/** Silent upsell rail after voice `place_order` (`order_suggestions` WS message). */
+export type OrderSuggestionTrigger = {
+  dish_id: number;
+  name: string;
+};
+
+export type OrderSuggestionsPayload = {
+  title: string;
+  triggered_by: OrderSuggestionTrigger[];
+  items: MenuSuggestion[];
+};
+
+export type OrderSuggestionsEvent = {
+  turn_id: number;
+  order_id: string | null;
+  payload: OrderSuggestionsPayload;
+};
+
+export type KitchenNavTab = "home" | "orders" | "alerts" | "menu";
 
 /** Kitchen menu editor — fetch_menu / save_menu / upload_menu_image */
 export type KitchenMenuItem = {
@@ -102,5 +133,11 @@ export type KitchenMenuItem = {
   available: boolean;
   /** Set after POST /api/upload_menu_image */
   image?: string | null;
+  /**
+   * Optional fields the backend may include on fetch_menu rows.
+   * Kitchen editor doesn't render these, but the guest full-menu view does.
+   */
+  description?: string | null;
+  section?: string | null;
 };
 

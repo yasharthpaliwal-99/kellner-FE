@@ -7,6 +7,8 @@ import { Nav } from "./components/Nav";
 import { HomeView } from "./components/HomeView";
 import { OrderListView } from "./components/OrderListView";
 import { MenuView } from "./components/MenuView";
+import { KitchenAlertsView } from "./components/KitchenAlertsView";
+import { postKitchenLineStatus, type DishLineStatus } from "./lib/kitchenLineStatusApi";
 import "./App.css";
 
 const POLL_MS = 12_000;
@@ -113,16 +115,19 @@ export default function KitchenApp() {
 
   const kitchenHotelId = getKitchenHotelId();
 
-  const updateStatus = async (orderId: string, status: string) => {
-    const r = await fetch(apiUrl(`/api/orders/${orderId}/status`), {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
+  const updateLineDishStatus = async (params: {
+    tableNumber: number;
+    dishName: string;
+    dishStatus: DishLineStatus;
+  }) => {
+    const hid = kitchenHotelId;
+    if (!hid) throw new Error("Missing hotel");
+    await postKitchenLineStatus({
+      hotel_id: hid,
+      table_number: params.tableNumber,
+      dish_name: params.dishName.trim(),
+      dish_status: params.dishStatus,
     });
-    if (!r.ok) {
-      const j = await r.json().catch(() => ({}));
-      throw new Error(j.error || "Update failed");
-    }
     await refresh();
   };
 
@@ -165,8 +170,11 @@ export default function KitchenApp() {
           <OrderListView
             orders={orders}
             loading={loading}
-            onUpdateStatus={updateStatus}
+            onUpdateLineDishStatus={updateLineDishStatus}
           />
+        )}
+        {tab === "alerts" && (
+          <KitchenAlertsView hotelId={kitchenHotelId} orders={orders} loading={loading} />
         )}
         {tab === "menu" && kitchenHotelId && (
           <MenuView hotelId={kitchenHotelId} reloadToken={menuReloadToken} />

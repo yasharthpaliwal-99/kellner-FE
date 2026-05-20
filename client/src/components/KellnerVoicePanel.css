@@ -187,6 +187,9 @@
   background: var(--surface, #fff);
   color: var(--text, #0a0a0a);
   transition: background 0.15s, border-color 0.15s;
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 .kellner-voice-mic:hover:not(:disabled) {
@@ -199,10 +202,16 @@
   cursor: not-allowed;
 }
 
-.kellner-voice-mic.is-muted {
-  color: #b91c1c;
-  border-color: rgba(185, 28, 28, 0.35);
-  background: rgba(254, 242, 242, 0.9);
+.kellner-voice-mic.is-holding {
+  color: #312e81;
+  border-color: rgba(79, 70, 229, 0.45);
+  background: rgba(79, 70, 229, 0.1);
+}
+
+.kellner-voice-panel--guest .kellner-voice-mic.is-holding {
+  color: var(--logo-black, #0a0a0a);
+  border-color: rgba(10, 10, 10, 0.35);
+  background: rgba(10, 10, 10, 0.08);
 }
 
 .kellner-voice-mic-svg {

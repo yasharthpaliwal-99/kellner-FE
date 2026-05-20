@@ -1,17 +1,75 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { KitchenMenuItem } from "../types";
 import { apiUrl } from "../lib/api";
+import { formatAmount } from "../lib/formatAmount";
+import { getAuthSession } from "../lib/authSession";
 import "./FullMenuModal.css";
 
-function formatPrice(price: number | string | null): string {
-  const n = typeof price === "string" ? parseFloat(price) : price;
-  if (n == null || !Number.isFinite(n)) return "—";
-  try {
-    return new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(n);
-  } catch {
-    return `${n}`;
+/* ───────────────────────── helpers ───────────────────────── */
+
+/**
+ * Mirror of `MenuView.normalizeRow` (kitchen side), with two extra optional
+ * fields surfaced for the guest UI — `description` and `section`/`category`.
+ * Same `fetch_menu` payload, so any extras the backend already returns flow
+ * through transparently; missing fields just stay null.
+ */
+function normalizeRow(row: unknown): KitchenMenuItem | null {
+  if (!row || typeof row !== "object") return null;
+  const r = row as Record<string, unknown>;
+  const dish_id = Number(r.dish_id);
+  if (!Number.isFinite(dish_id)) return null;
+  const name = String(r.name ?? "Item").trim() || "Item";
+
+  const rawPrice = r.price;
+  let price: number | string | null = null;
+  if (rawPrice != null && rawPrice !== "") {
+    const n = typeof rawPrice === "number" ? rawPrice : Number(rawPrice);
+    price = Number.isFinite(n) ? n : null;
   }
+
+  const available = Boolean(r.available);
+
+  const rawImg = r.image;
+  const image = typeof rawImg === "string" && rawImg.trim() ? rawImg.trim() : null;
+
+  // Backend may use any of these; pick the first non-empty string.
+  const descCandidates = [r.description, r.desc, r.info];
+  let description: string | null = null;
+  for (const c of descCandidates) {
+    if (typeof c === "string" && c.trim()) {
+      description = c.trim();
+      break;
+    }
+  }
+
+  const sectionCandidates = [r.section, r.category, r.group];
+  let section: string | null = null;
+  for (const c of sectionCandidates) {
+    if (typeof c === "string" && c.trim()) {
+      section = c.trim();
+      break;
+    }
+  }
+
+  return {
+    dish_id,
+    name,
+    price,
+    available,
+    ...(image ? { image } : {}),
+    ...(description ? { description } : {}),
+    ...(section ? { section } : {}),
+  };
 }
+
+function parseFetchMenuItems(data: unknown): KitchenMenuItem[] {
+  if (!data || typeof data !== "object") return [];
+  const o = data as Record<string, unknown>;
+  const raw = Array.isArray(o.items) ? o.items : Array.isArray(data) ? data : [];
+  return raw.map(normalizeRow).filter((x): x is KitchenMenuItem => x !== null);
+}
+
+/* ───────────────────────── card ───────────────────────── */
 
 type MenuCardProps = { item: KitchenMenuItem };
 
@@ -44,12 +102,21 @@ function MenuItemCard({ item }: MenuCardProps) {
         )}
       </div>
       <div className="fm-card-body">
-        <p className="fm-card-name">{item.name}</p>
-        <p className="fm-card-price">{formatPrice(item.price)}</p>
+        <header className="fm-card-head">
+          <p className="fm-card-name">{item.name}</p>
+          <p className="fm-card-price">{formatAmount(item.price)}</p>
+        </header>
+        {item.description ? (
+          <p className="fm-card-desc">{item.description}</p>
+        ) : null}
       </div>
     </article>
   );
 }
+
+/* ───────────────────────── modal ───────────────────────── */
+
+const ALL_SECTIONS = "__all__";
 
 type Props = {
   open: boolean;
@@ -62,6 +129,7 @@ export function FullMenuModal({ open, onClose }: Props) {
   const [items, setItems] = useState<KitchenMenuItem[]>([]);
   const [fetchState, setFetchState] = useState<FetchState>("idle");
   const [search, setSearch] = useState("");
+  const [activeSection, setActiveSection] = useState<string>(ALL_SECTIONS);
   const dialogRef = useRef<HTMLDialogElement>(null);
 
   // open / close native dialog
@@ -84,23 +152,38 @@ export function FullMenuModal({ open, onClose }: Props) {
     return () => el.removeEventListener("close", handler);
   }, [onClose]);
 
-  // fetch menu when opened
+  // fetch menu when opened (same shape as kitchen MenuView)
   useEffect(() => {
     if (!open) return;
     setFetchState("loading");
-    fetch(apiUrl("/api/kitchen/fetch_menu"))
-      .then((res) => {
+    const session = getAuthSession();
+    const hid = Number(session?.hotel_id);
+    if (!Number.isFinite(hid)) {
+      setItems([]);
+      setFetchState("error");
+      return;
+    }
+    // NOTE: guest reads the menu anonymously — `hotel_id` in body is enough.
+    // We deliberately do NOT send `x-device-session` here: the kitchen endpoint
+    // rejects device sessions with 401, and we don't need auth to surface the
+    // public menu to a diner.
+    fetch(apiUrl("/api/kitchen/fetch_menu"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ hotel_id: hid }),
+    })
+      .then(async (res) => {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();
       })
       .then((data: unknown) => {
-        const arr = Array.isArray(data) ? (data as KitchenMenuItem[]) : [];
-        setItems(arr);
+        setItems(parseFetchMenuItems(data));
         setFetchState("idle");
+        // reset filters when a fresh menu loads
+        setActiveSection(ALL_SECTIONS);
+        setSearch("");
       })
-      .catch(() => {
-        setFetchState("error");
-      });
+      .catch(() => setFetchState("error"));
   }, [open]);
 
   // close on backdrop click
@@ -108,11 +191,33 @@ export function FullMenuModal({ open, onClose }: Props) {
     if (e.target === dialogRef.current) onClose();
   };
 
-  const filteredItems = search.trim()
-    ? items.filter((it) =>
-        it.name.toLowerCase().includes(search.trim().toLowerCase())
-      )
-    : items;
+  /** Unique section names preserved in first-seen order. */
+  const sections = useMemo(() => {
+    const seen: string[] = [];
+    const set = new Set<string>();
+    for (const it of items) {
+      const s = it.section?.trim();
+      if (s && !set.has(s)) {
+        set.add(s);
+        seen.push(s);
+      }
+    }
+    return seen;
+  }, [items]);
+
+  const filteredItems = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return items.filter((it) => {
+      if (activeSection !== ALL_SECTIONS) {
+        if ((it.section ?? "") !== activeSection) return false;
+      }
+      if (q) {
+        const hay = `${it.name} ${it.description ?? ""}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [items, search, activeSection]);
 
   const availableItems = filteredItems.filter((it) => it.available);
   const unavailableItems = filteredItems.filter((it) => !it.available);
@@ -127,26 +232,47 @@ export function FullMenuModal({ open, onClose }: Props) {
       <div className="fm-sheet">
         <header className="fm-header">
           <h2 className="fm-title">Menu</h2>
-          <button
-            className="fm-close-btn"
-            aria-label="Close menu"
-            onClick={onClose}
-            type="button"
-          >
-            <span aria-hidden>✕</span>
-          </button>
+          <div className="fm-header-tools">
+            <input
+              className="fm-search"
+              type="search"
+              placeholder="Search…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              aria-label="Search menu"
+            />
+            <button
+              className="fm-close-btn"
+              aria-label="Close menu"
+              onClick={onClose}
+              type="button"
+            >
+              <span aria-hidden>✕</span>
+            </button>
+          </div>
         </header>
 
-        <div className="fm-search-wrap">
-          <input
-            className="fm-search"
-            type="search"
-            placeholder="Search dishes…"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            aria-label="Search menu"
-          />
-        </div>
+        {sections.length > 0 ? (
+          <nav className="fm-filterbar" aria-label="Menu sections">
+            <button
+              type="button"
+              className={`fm-chip${activeSection === ALL_SECTIONS ? " is-active" : ""}`}
+              onClick={() => setActiveSection(ALL_SECTIONS)}
+            >
+              All
+            </button>
+            {sections.map((s) => (
+              <button
+                key={s}
+                type="button"
+                className={`fm-chip${activeSection === s ? " is-active" : ""}`}
+                onClick={() => setActiveSection(s)}
+              >
+                {s}
+              </button>
+            ))}
+          </nav>
+        ) : null}
 
         <div className="fm-body">
           {fetchState === "loading" && (
@@ -167,7 +293,9 @@ export function FullMenuModal({ open, onClose }: Props) {
           {fetchState === "idle" && filteredItems.length === 0 && (
             <div className="fm-state-wrap" aria-live="polite">
               <p className="fm-state-text">
-                {search.trim() ? "No dishes match your search." : "No items on the menu yet."}
+                {search.trim() || activeSection !== ALL_SECTIONS
+                  ? "No dishes match your filters."
+                  : "No items on the menu yet."}
               </p>
             </div>
           )}

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getKellnerWebSocketUrl } from "../lib/kellnerWs";
-import type { MenuSuggestion } from "../types";
+import { parseOrderSuggestionsPayload } from "../lib/orderSuggestions";
+import type { MenuSuggestion, OrderSuggestionsEvent } from "../types";
 import "./KellnerVoicePanel.css";
 
 const BARGE_RMS = 0.08;
@@ -63,6 +64,10 @@ type Props = {
   onConnectionChange?: (connected: boolean) => void;
   onReplyModeChange?: (mode: ReplyMode) => void;
   onStructuredPayload?: (mode: ReplyMode, payload: unknown) => void;
+  /** Silent pairing rail after voice `place_order` (`order_suggestions`). */
+  onOrderSuggestions?: (event: OrderSuggestionsEvent) => void;
+  /** Start of a new user utterance — clear stale pairing UI from the previous turn. */
+  onUserTranscript?: () => void;
   /**
    * Guest: when true (e.g. navigated from “Call waiter”), connect then start mic automatically
    * and send `{ type: "guest_greeting" }` after `voice_session` so the backend can open with a welcome line.
@@ -95,16 +100,40 @@ export function KellnerVoicePanel({
   onConnectionChange,
   onReplyModeChange,
   onStructuredPayload,
+  onOrderSuggestions,
+  onUserTranscript,
   variant = "default",
   autoStartVoiceSession = false,
 }: Props) {
   const [connected, setConnected] = useState(false);
   const [voiceActive, setVoiceActive] = useState(false);
-  const [micMuted, setMicMuted] = useState(false);
-  const micMutedRef = useRef(false);
+  /**
+   * Hold-to-speak: mic is muted by default; only unmutes while the user
+   * presses the mic button. The existing capture/RMS/uplink path inside
+   * `node.onaudioprocess` already gates entirely on `micMutedRef.current`,
+   * so no other code paths need to change.
+   */
+  const [micMuted, setMicMuted] = useState(true);
+  const micMutedRef = useRef(true);
   useEffect(() => {
     micMutedRef.current = micMuted;
   }, [micMuted]);
+  /**
+   * Tracks whether we've already announced `speech_start` for the current hold
+   * so `releaseMic` only emits `speech_end` once even when pointerUp +
+   * lostPointerCapture (or pointerCancel) fire in quick succession.
+   */
+  const micHeldRef = useRef(false);
+  /**
+   * After release, keep streaming a tiny burst of synthetic ~-60 dB dither for
+   * this many ms so the server VAD's silence timer can tick and commit the
+   * last partial. Without it, releasing produces no transcript until the
+   * *next* hold's audio re-triggers the VAD (the classic "stuck partial"
+   * bug). 1200 ms comfortably covers the 500–1000 ms endpoint thresholds
+   * used by all common streaming STTs.
+   */
+  const TAIL_DITHER_MS = 1200;
+  const tailDitherUntilRef = useRef(0);
   const [status, setStatus] = useState("Connecting…");
   const [lines, setLines] = useState<ConvLine[]>([]);
   const [startDisabled, setStartDisabled] = useState(true);
@@ -138,6 +167,14 @@ export function KellnerVoicePanel({
   useEffect(() => {
     onStructuredPayloadRef.current = onStructuredPayload;
   }, [onStructuredPayload]);
+  const onOrderSuggestionsRef = useRef(onOrderSuggestions);
+  useEffect(() => {
+    onOrderSuggestionsRef.current = onOrderSuggestions;
+  }, [onOrderSuggestions]);
+  const onUserTranscriptRef = useRef(onUserTranscript);
+  useEffect(() => {
+    onUserTranscriptRef.current = onUserTranscript;
+  }, [onUserTranscript]);
 
   useEffect(() => {
     onPhaseRef.current?.(phaseLabelFromStatus(status));
@@ -173,6 +210,13 @@ export function KellnerVoicePanel({
   const replyModeByTurnRef = useRef<Map<number, ReplyMode>>(new Map());
   const nextPlayTimeRef = useRef(0);
   const bargeInAllowedAfterRef = useRef(0);
+  /**
+   * Latches when the user has already barged-in for the current utterance,
+   * so we don't fire `sendInterrupt` repeatedly across many `transcript_partial`
+   * events (or a partial + the legacy RMS path) for the same speech.
+   * Reset whenever a new user utterance / assistant turn boundary is reached.
+   */
+  const bargedInForUtteranceRef = useRef(false);
   const listRef = useRef<HTMLDivElement | null>(null);
 
   // ── Layer 1: discard set — turn_ids whose audio must NEVER play ──
@@ -213,6 +257,93 @@ export function KellnerVoicePanel({
   }, []);
 
   /**
+   * Graceful end-of-turn shutdown for the TTS audio chain.
+   *
+   * Used ONLY on a clean server `done`. Solves the "radio noise / hiss tail" heard
+   * after every assistant sentence by:
+   *   1. Linear-ramping `ttsGain` to 0 ending exactly at the last scheduled sample,
+   *      so the buffer terminates at zero (no DAC step → no click).
+   *   2. Suspending the TTS `AudioContext` after the fade so the audio output
+   *      hardware goes idle (kills the speaker noise floor between turns).
+   *
+   * NOT a replacement for `flushAssistantAudio`: barge-in (`interrupted`) still
+   * needs the immediate hard-mute + close path. We keep refs alive here so the
+   * next `audio_delta` can resume() the same context cheaply.
+   */
+  const softFinishAssistantAudio = useCallback(() => {
+    const ctx = ttsCtxRef.current;
+    const gain = ttsGainRef.current;
+    if (!ctx || !gain || ctx.state === "closed") return;
+
+    const FADE_S = 0.08;
+    const SUSPEND_GUARD_MS = 120;
+
+    const now = ctx.currentTime;
+    const endTime = Math.max(nextPlayTimeRef.current, now);
+    const fadeStart = Math.max(now, endTime - FADE_S);
+
+    try {
+      gain.gain.cancelScheduledValues(fadeStart);
+      gain.gain.setValueAtTime(gain.gain.value, fadeStart);
+      gain.gain.linearRampToValueAtTime(0, endTime);
+    } catch {
+      /* ok — fall through to suspend */
+    }
+
+    const fadeMs = Math.max(0, (endTime - now) * 1000);
+    window.setTimeout(() => {
+      const c = ttsCtxRef.current;
+      if (!c || c.state !== "running") return;
+      c.suspend().catch(() => {});
+    }, fadeMs + SUSPEND_GUARD_MS);
+  }, []);
+
+  /**
+   * Press: open mic locally + tell server a new speech segment is starting so
+   * its STT can spin up a fresh recognition session. Idempotent — repeated
+   * presses without a release are no-ops.
+   */
+  const acquireMic = useCallback(() => {
+    if (micHeldRef.current) return;
+    micHeldRef.current = true;
+    micMutedRef.current = false;
+    setMicMuted(false);
+    // New hold cancels any pending tail dither — real audio takes over.
+    tailDitherUntilRef.current = 0;
+    const ws = wsRef.current;
+    if (ws?.readyState === WebSocket.OPEN) {
+      try {
+        ws.send(JSON.stringify({ type: "speech_start" }));
+      } catch {
+        /* socket may have died between checks; recovery layer will reconnect */
+      }
+    }
+  }, []);
+
+  /**
+   * Release: stop streaming + tell server the segment ended so it can flush
+   * the last partial → commit the turn. Idempotent across pointerUp /
+   * pointerCancel / lostPointerCapture so we never send a duplicate
+   * `speech_end` for the same hold.
+   */
+  const releaseMic = useCallback(() => {
+    if (!micHeldRef.current) return;
+    micHeldRef.current = false;
+    micMutedRef.current = true;
+    setMicMuted(true);
+    // Arm the tail-dither window so the server VAD finishes endpointing.
+    tailDitherUntilRef.current = performance.now() + TAIL_DITHER_MS;
+    const ws = wsRef.current;
+    if (ws?.readyState === WebSocket.OPEN) {
+      try {
+        ws.send(JSON.stringify({ type: "speech_end" }));
+      } catch {
+        /* same as above — best-effort */
+      }
+    }
+  }, []);
+
+  /**
    * Full client-side interrupt: flush + discard turn + notify server.
    */
   const sendInterrupt = useCallback(() => {
@@ -227,7 +358,13 @@ export function KellnerVoicePanel({
     }
   }, [flushAssistantAudio]);
 
-  /** Get or lazily create a fresh TTS context + gain node. */
+  /**
+   * Get or lazily create a fresh TTS context + gain node.
+   *
+   * If the context was previously `suspended` by `softFinishAssistantAudio`
+   * (clean turn end), we resume it, snap gain back to 1, and reset the
+   * playback cursor so the new turn starts cleanly.
+   */
   const getTtsCtx = (): { ctx: AudioContext; gain: GainNode } => {
     let ctx = ttsCtxRef.current;
     if (!ctx || ctx.state === "closed") {
@@ -237,6 +374,18 @@ export function KellnerVoicePanel({
       g.gain.value = 1;
       g.connect(ctx.destination);
       ttsGainRef.current = g;
+      nextPlayTimeRef.current = ctx.currentTime;
+    } else if (ctx.state === "suspended") {
+      void ctx.resume().catch(() => {});
+      const g = ttsGainRef.current;
+      if (g) {
+        try {
+          g.gain.cancelScheduledValues(ctx.currentTime);
+          g.gain.setValueAtTime(1, ctx.currentTime);
+        } catch {
+          /* ok */
+        }
+      }
       nextPlayTimeRef.current = ctx.currentTime;
     }
     return { ctx, gain: ttsGainRef.current! };
@@ -351,6 +500,12 @@ export function KellnerVoicePanel({
   function stopVoiceCapture() {
     voiceActiveRef.current = false;
     setVoiceActive(false);
+    // Drop any in-flight hold without trying to notify the server: socket may
+    // already be closed, and the next session will start a fresh hold anyway.
+    micHeldRef.current = false;
+    micMutedRef.current = true;
+    setMicMuted(true);
+    tailDitherUntilRef.current = 0;
     if (rafIdRef.current !== null) {
       cancelAnimationFrame(rafIdRef.current);
       rafIdRef.current = null;
@@ -416,9 +571,17 @@ export function KellnerVoicePanel({
           const t = String(msg.text ?? "");
           setLivePartial(t);
           setStatus(`Heard: ${t || "…"}`);
+          // Partial-driven barge-in: as soon as the server confirms the user
+          // is speaking (first partial of this utterance) while assistant TTS
+          // is still streaming, cut the assistant immediately.
+          if (assistantSpeakingRef.current && !bargedInForUtteranceRef.current) {
+            bargedInForUtteranceRef.current = true;
+            sendInterrupt();
+          }
 
         } else if (type === "transcript") {
           setLivePartial("");
+          onUserTranscriptRef.current?.();
           // Kill any previous turn's audio before accepting the new turn
           flushAssistantAudio();
           // New logical turn — clear old discard entries (memory bound)
@@ -436,6 +599,8 @@ export function KellnerVoicePanel({
           setLines((prev) => [...prev, { id: aid, role: "assistant", text: "…", streaming: true }]);
           setStatus("Thinking…");
           assistantSpeakingRef.current = false;
+          // Utterance complete — next user utterance gets a fresh barge-in chance.
+          bargedInForUtteranceRef.current = false;
 
         } else if (type === "assistant_reply_mode") {
           const tid = Number(msg.turn_id);
@@ -456,6 +621,21 @@ export function KellnerVoicePanel({
           const items = (msg.items as RecItem[]) ?? [];
           onRecRef.current?.(mapRecItems(items));
           onRecLoadingRef.current?.(false);
+        } else if (type === "order_suggestions") {
+          const tid = Number(msg.turn_id);
+          if (!Number.isFinite(tid)) return;
+          if (!isTurnAlive(tid)) return;
+          const payload = parseOrderSuggestionsPayload(msg.payload);
+          if (!payload) return;
+          const orderId =
+            msg.order_id == null || msg.order_id === ""
+              ? null
+              : String(msg.order_id);
+          onOrderSuggestionsRef.current?.({
+            turn_id: tid,
+            order_id: orderId,
+            payload,
+          });
         } else if (type === "assistant_text_delta") {
           if (!isTurnAlive(msg.turn_id)) return;
           const delta = String(msg.text ?? "");
@@ -492,6 +672,9 @@ export function KellnerVoicePanel({
             );
           }
           assistantLineIdRef.current = null;
+          softFinishAssistantAudio();
+          // Assistant naturally finished — clear barge-in latch for the next turn.
+          bargedInForUtteranceRef.current = false;
           setStatus("Listening…");
 
         } else if (type === "interrupted") {
@@ -507,6 +690,8 @@ export function KellnerVoicePanel({
           assistantSpeakingRef.current = false;
           assistantLineIdRef.current = null;
           onRecLoadingRef.current?.(false);
+          // Server-confirmed interrupt — latch can be cleared for the next utterance.
+          bargedInForUtteranceRef.current = false;
           setStatus("Listening…");
 
         } else if (type === "error") {
@@ -606,19 +791,44 @@ export function KellnerVoicePanel({
       const fromRate = ctx.sampleRate;
 
       node.onaudioprocess = (e) => {
-        if (micMutedRef.current) return;
         if (!voiceActiveRef.current || !wsRef.current || wsRef.current.readyState !== WebSocket.OPEN) {
           return;
         }
         const f32 = e.inputBuffer.getChannelData(0);
+
+        // Hold-to-speak gating with a short post-release dither tail.
+        //
+        // Press/release emit `speech_start` / `speech_end` JSON so backends
+        // that respect them can endpoint immediately (see `acquireMic` /
+        // `releaseMic`). For backends that only endpoint via VAD silence
+        // timers, sending nothing on release leaves the last partial stuck
+        // — the next hold's audio is what finally commits the previous turn.
+        // To avoid that, for ~TAIL_DITHER_MS after release we keep streaming
+        // synthetic ~-60 dB dither so the VAD silence clock ticks and commits
+        // the turn. After the tail elapses, we go fully silent — no continuous
+        // STT bill between utterances.
+        if (micMutedRef.current) {
+          if (performance.now() >= tailDitherUntilRef.current) return;
+          const dither = new Float32Array(f32.length);
+          for (let i = 0; i < dither.length; i++) {
+            dither[i] = (Math.random() - 0.5) * 0.001;
+          }
+          const downS = downsampleTo16k(dither, fromRate);
+          const pcmS = floatTo16BitPCM(downS);
+          wsRef.current.send(pcmS.buffer);
+          return;
+        }
+
         let sum = 0;
         for (let i = 0; i < f32.length; i++) sum += f32[i]! * f32[i]!;
         const rms = Math.sqrt(sum / f32.length);
         if (
           assistantSpeakingRef.current &&
+          !bargedInForUtteranceRef.current &&
           performance.now() >= bargeInAllowedAfterRef.current &&
           rms > BARGE_RMS
         ) {
+          bargedInForUtteranceRef.current = true;
           sendInterrupt();
         }
 
@@ -635,7 +845,9 @@ export function KellnerVoicePanel({
       silentOut.connect(ctx.destination);
 
       voiceActiveRef.current = true;
-      setMicMuted(false);
+      // Hold-to-speak: stay muted on session start; unmutes only while pressed.
+      micMutedRef.current = true;
+      setMicMuted(true);
       setVoiceActive(true);
       setStartDisabled(true);
       setStatus("Listening… speak naturally");
@@ -714,11 +926,26 @@ export function KellnerVoicePanel({
         ) : null}
         <button
           type="button"
-          className={`kellner-voice-mic ${micMuted ? "is-muted" : ""}`}
+          className={`kellner-voice-mic ${!micMuted ? "is-holding" : ""}`}
           disabled={!voiceActive}
-          aria-pressed={micMuted}
-          title={!voiceActive ? "Start session first" : micMuted ? "Unmute microphone" : "Mute microphone"}
-          onClick={() => setMicMuted((m) => !m)}
+          aria-pressed={!micMuted}
+          aria-label={!voiceActive ? "Start session first" : "Hold to speak"}
+          title={!voiceActive ? "Start session first" : "Press and hold to speak"}
+          onPointerDown={(e) => {
+            if (!voiceActive) return;
+            try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* ok */ }
+            acquireMic();
+          }}
+          onPointerUp={(e) => {
+            try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* ok */ }
+            releaseMic();
+          }}
+          onPointerCancel={() => {
+            releaseMic();
+          }}
+          onLostPointerCapture={() => {
+            releaseMic();
+          }}
         >
           <svg
             className="kellner-voice-mic-svg"
@@ -735,9 +962,8 @@ export function KellnerVoicePanel({
             <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z" />
             <path d="M19 10v1a7 7 0 0 1-14 0v-1" />
             <line x1="12" x2="12" y1="19" y2="22" />
-            {micMuted ? <line x1="2" y1="2" x2="22" y2="22" /> : null}
           </svg>
-          {micMuted ? "Mic off" : "Mic on"}
+          {!micMuted ? "Speaking…" : "Hold to speak"}
         </button>
       </div>
     </section>

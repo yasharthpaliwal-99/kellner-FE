@@ -25,6 +25,13 @@ export function Nav({ active, onChange }: Props) {
       </button>
       <button
         type="button"
+        className={active === "alerts" ? "nav-item active" : "nav-item"}
+        onClick={() => onChange("alerts")}
+      >
+        Alerts
+      </button>
+      <button
+        type="button"
         className={active === "menu" ? "nav-item active" : "nav-item"}
         onClick={() => onChange("menu")}
       >

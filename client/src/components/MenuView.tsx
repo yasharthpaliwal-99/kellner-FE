@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
 import { apiUrl } from "../lib/api";
 import { getAuthSession } from "../lib/authSession";
+import { formatAmount } from "../lib/formatAmount";
 import type { KitchenMenuItem } from "../types";
 import "./MenuView.css";
 
@@ -65,15 +66,6 @@ function parseFetchMenuItems(data: unknown): KitchenMenuItem[] {
   const raw = o.items;
   if (!Array.isArray(raw)) return [];
   return raw.map(normalizeRow).filter((x): x is KitchenMenuItem => x !== null);
-}
-
-function formatPrice(price: number | null) {
-  if (price == null || !Number.isFinite(price)) return "—";
-  try {
-    return new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(price);
-  } catch {
-    return String(price);
-  }
 }
 
 function snapshotAvailable(items: KitchenMenuItem[]): string {
@@ -280,7 +272,7 @@ export function MenuView({ hotelId, reloadToken }: Props) {
                 <tr key={row.dish_id}>
                   <td className="menu-col-name">{row.name}</td>
                   <td className="menu-col-id">{row.dish_id}</td>
-                  <td className="menu-col-price">{formatPrice(row.price)}</td>
+                  <td className="menu-col-price">{formatAmount(row.price)}</td>
                   <td className="menu-col-image">
                     <div className="menu-image-cell">
                       {row.image ? (

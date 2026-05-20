@@ -1,3 +1,4 @@
+import { formatAmount } from "../lib/formatAmount";
 import type {
   StructuredData,
   StructuredBillPayload,
@@ -5,15 +6,6 @@ import type {
   StructuredRecommendationsPayload,
 } from "../types";
 import "./StructuredPanel.css";
-
-function formatPrice(price: number | null): string {
-  if (price == null || Number.isNaN(price)) return "—";
-  try {
-    return new Intl.NumberFormat(undefined, { style: "currency", currency: "USD" }).format(price);
-  } catch {
-    return `${price}`;
-  }
-}
 
 // ─── Bill ────────────────────────────────────────────────────────────────────
 
@@ -37,7 +29,7 @@ function BillView({ payload }: { payload: StructuredBillPayload }) {
           <li key={i} className="sp-bill-row">
             <span className="sp-bill-name">{item.name}</span>
             <span className="sp-bill-qty">×{item.quantity}</span>
-            <span className="sp-bill-price">{formatPrice(item.price)}</span>
+            <span className="sp-bill-price">{formatAmount(item.price)}</span>
           </li>
         ))}
       </ol>
@@ -46,7 +38,7 @@ function BillView({ payload }: { payload: StructuredBillPayload }) {
 
       <div className="sp-bill-total">
         <span className="sp-bill-total-label">Total</span>
-        <span className="sp-bill-total-amount">{formatPrice(payload.total)}</span>
+        <span className="sp-bill-total-amount">{formatAmount(payload.total)}</span>
       </div>
     </div>
   );
@@ -102,7 +94,7 @@ function StructuredRecsView({ payload }: { payload: StructuredRecommendationsPay
             <div className="sp-rec-body">
               <span className="sp-rec-name">{item.name}</span>
               {item.price != null && (
-                <span className="sp-rec-price">{formatPrice(item.price)}</span>
+                <span className="sp-rec-price">{formatAmount(item.price)}</span>
               )}
             </div>
           </li>

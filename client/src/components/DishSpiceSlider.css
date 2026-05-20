@@ -1,0 +1,104 @@
+.dish-spice {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.65rem 0.85rem;
+  margin-top: 0.35rem;
+  padding: 0.45rem 0;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.dish-spice-label {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.dish-spice-value {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: #c2410c;
+  min-width: 3.5rem;
+  text-align: right;
+}
+
+.dish-spice-track-wrap {
+  position: relative;
+  min-width: 0;
+}
+
+.dish-spice-range {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 0.45rem;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    rgba(254, 243, 199, 0.95) 0%,
+    rgba(251, 146, 60, 0.55) 50%,
+    rgba(220, 38, 38, 0.45) 100%
+  );
+  outline: none;
+  cursor: pointer;
+}
+
+.dish-spice-range:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.dish-spice-range::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid rgba(194, 65, 12, 0.85);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.18);
+  transition: transform 0.12s ease;
+}
+
+.dish-spice-range::-webkit-slider-thumb:hover {
+  transform: scale(1.06);
+}
+
+.dish-spice-range::-moz-range-thumb {
+  width: 1.15rem;
+  height: 1.15rem;
+  border-radius: 50%;
+  background: #fff;
+  border: 2px solid rgba(194, 65, 12, 0.85);
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.18);
+  cursor: pointer;
+}
+
+.dish-spice-ticks {
+  pointer-events: none;
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  display: flex;
+  justify-content: space-between;
+  padding: 0 0.4rem;
+}
+
+.dish-spice-tick {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.12);
+}
+
+.dish-spice-tick.is-hot {
+  background: rgba(220, 38, 38, 0.45);
+}
+
+.dish-spice.is-disabled .dish-spice-value {
+  color: var(--muted);
+}
