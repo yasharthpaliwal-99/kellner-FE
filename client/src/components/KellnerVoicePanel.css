@@ -163,6 +163,7 @@
   gap: 0.75rem;
   justify-content: center;
   margin-top: 0.25rem;
+  touch-action: none;
 }
 
 .kellner-voice-panel--guest .kellner-voice-start {
@@ -190,6 +191,16 @@
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.kellner-voice-mic-label,
+.kellner-voice-mic-svg {
+  pointer-events: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
 }
 
 .kellner-voice-mic:hover:not(:disabled) {

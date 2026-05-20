@@ -30,6 +30,11 @@ function nextId() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
+/** Stop tablet long-press menus (share / print / text selection) on hold-to-speak. */
+function blockBrowserGesture(e: Event) {
+  e.preventDefault();
+}
+
 function downsampleTo16k(samples: Float32Array, fromRate: number) {
   if (fromRate === 16000) return samples;
   const ratio = fromRate / 16000;
@@ -124,6 +129,24 @@ export function KellnerVoicePanel({
    * lostPointerCapture (or pointerCancel) fire in quick succession.
    */
   const micHeldRef = useRef(false);
+  const micBtnRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    const el = micBtnRef.current;
+    if (!el) return;
+    el.addEventListener("contextmenu", blockBrowserGesture);
+    el.addEventListener("selectstart", blockBrowserGesture);
+    el.addEventListener("dragstart", blockBrowserGesture);
+    el.addEventListener("touchstart", blockBrowserGesture, { passive: false });
+    el.addEventListener("touchmove", blockBrowserGesture, { passive: false });
+    return () => {
+      el.removeEventListener("contextmenu", blockBrowserGesture);
+      el.removeEventListener("selectstart", blockBrowserGesture);
+      el.removeEventListener("dragstart", blockBrowserGesture);
+      el.removeEventListener("touchstart", blockBrowserGesture);
+      el.removeEventListener("touchmove", blockBrowserGesture);
+    };
+  }, []);
   /**
    * After release, keep streaming a tiny burst of synthetic ~-60 dB dither for
    * this many ms so the server VAD's silence timer can tick and commit the
@@ -925,22 +948,28 @@ export function KellnerVoicePanel({
         </button>
         ) : null}
         <button
+          ref={micBtnRef}
           type="button"
           className={`kellner-voice-mic ${!micMuted ? "is-holding" : ""}`}
           disabled={!voiceActive}
           aria-pressed={!micMuted}
           aria-label={!voiceActive ? "Start session first" : "Hold to speak"}
-          title={!voiceActive ? "Start session first" : "Press and hold to speak"}
+          onContextMenu={blockBrowserGesture}
+          onSelectStart={blockBrowserGesture}
+          onDragStart={blockBrowserGesture}
           onPointerDown={(e) => {
             if (!voiceActive) return;
+            e.preventDefault();
             try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* ok */ }
             acquireMic();
           }}
           onPointerUp={(e) => {
+            e.preventDefault();
             try { e.currentTarget.releasePointerCapture(e.pointerId); } catch { /* ok */ }
             releaseMic();
           }}
-          onPointerCancel={() => {
+          onPointerCancel={(e) => {
+            e.preventDefault();
             releaseMic();
           }}
           onLostPointerCapture={() => {
@@ -963,7 +992,9 @@ export function KellnerVoicePanel({
             <path d="M19 10v1a7 7 0 0 1-14 0v-1" />
             <line x1="12" x2="12" y1="19" y2="22" />
           </svg>
-          {!micMuted ? "Speaking…" : "Hold to speak"}
+          <span className="kellner-voice-mic-label" aria-hidden>
+            {!micMuted ? "Speaking…" : "Hold to speak"}
+          </span>
         </button>
       </div>
     </section>
