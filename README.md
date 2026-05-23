@@ -1,5 +1,5 @@
 # Kellner Client FE
-
+Kellner is restaurant AI assistant designed for fast paced restaurants
 Frontend for Kellner guest voice and kitchen staff experiences.
 
 ## Current Scope
