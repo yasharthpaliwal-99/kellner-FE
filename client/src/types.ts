@@ -131,13 +131,40 @@ export type KitchenMenuItem = {
   name: string;
   price: number | string | null;
   available: boolean;
+  chef_special: boolean;
+  todays_special: boolean;
+  must_try: boolean;
   /** Set after POST /api/upload_menu_image */
   image?: string | null;
   /**
    * Optional fields the backend may include on fetch_menu rows.
-   * Kitchen editor doesn't render these, but the guest full-menu view does.
+   * Guest full-menu view may use these; kitchen editor ignores them.
    */
   description?: string | null;
   section?: string | null;
+};
+
+/** GET /api/menu/spotlights — guest home rails (display-only). */
+export type MenuSpotlightItem = {
+  dish_id: number;
+  name: string;
+  price: number | string | null;
+  available: boolean;
+  image?: string | null;
+  chef_special: boolean;
+  todays_special: boolean;
+  must_try: boolean;
+};
+
+export type MenuSpotlightRail = {
+  id: string;
+  title: string;
+  items: MenuSpotlightItem[];
+};
+
+export type MenuSpotlightsResponse = {
+  ok: boolean;
+  hotel_id: number;
+  rails: MenuSpotlightRail[];
 };
 

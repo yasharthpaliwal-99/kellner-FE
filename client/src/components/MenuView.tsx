@@ -53,10 +53,22 @@ function normalizeRow(row: unknown): KitchenMenuItem | null {
     price = Number.isFinite(n) ? n : null;
   }
   const available = Boolean(r.available);
+  const chef_special = Boolean(r.chef_special);
+  const todays_special = Boolean(r.todays_special);
+  const must_try = Boolean(r.must_try);
   const rawImg = r.image;
   const image =
     typeof rawImg === "string" && rawImg.trim() ? rawImg.trim() : null;
-  return { dish_id, name, price, available, ...(image ? { image } : {}) };
+  return {
+    dish_id,
+    name,
+    price,
+    available,
+    chef_special,
+    todays_special,
+    must_try,
+    ...(image ? { image } : {}),
+  };
 }
 
 /** `fetch_menu` response: `{ ok, hotel_id, items: [...] }` */
@@ -68,11 +80,25 @@ function parseFetchMenuItems(data: unknown): KitchenMenuItem[] {
   return raw.map(normalizeRow).filter((x): x is KitchenMenuItem => x !== null);
 }
 
-function snapshotAvailable(items: KitchenMenuItem[]): string {
+type SpotlightKey = "chef_special" | "todays_special" | "must_try";
+
+const SPOTLIGHT_LABELS: Record<SpotlightKey, string> = {
+  chef_special: "Chef's",
+  todays_special: "Today",
+  must_try: "Must try",
+};
+
+function snapshotMenuState(items: KitchenMenuItem[]): string {
   return JSON.stringify(
     [...items]
       .sort((a, b) => a.dish_id - b.dish_id)
-      .map((i) => ({ dish_id: i.dish_id, available: i.available }))
+      .map((i) => ({
+        dish_id: i.dish_id,
+        available: i.available,
+        chef_special: i.chef_special,
+        todays_special: i.todays_special,
+        must_try: i.must_try,
+      }))
   );
 }
 
@@ -107,7 +133,7 @@ export function MenuView({ hotelId, reloadToken }: Props) {
       assertBodyOk(data, "Could not load menu");
       const next = parseFetchMenuItems(data);
       setItems(next);
-      setBaseline(snapshotAvailable(next));
+      setBaseline(snapshotMenuState(next));
     } catch (e) {
       setItems([]);
       setBaseline("");
@@ -121,11 +147,18 @@ export function MenuView({ hotelId, reloadToken }: Props) {
     void loadMenu();
   }, [loadMenu, reloadToken]);
 
-  const dirty = useMemo(() => snapshotAvailable(items) !== baseline, [items, baseline]);
+  const dirty = useMemo(() => snapshotMenuState(items) !== baseline, [items, baseline]);
 
   const setAvailable = (dishId: number, available: boolean) => {
     setSaveOk(null);
     setItems((prev) => prev.map((row) => (row.dish_id === dishId ? { ...row, available } : row)));
+  };
+
+  const setSpotlight = (dishId: number, key: SpotlightKey, value: boolean) => {
+    setSaveOk(null);
+    setItems((prev) =>
+      prev.map((row) => (row.dish_id === dishId ? { ...row, [key]: value } : row))
+    );
   };
 
   const uploadMenuImage = async (dishId: number, file: File) => {
@@ -191,6 +224,9 @@ export function MenuView({ hotelId, reloadToken }: Props) {
           items: items.map((i) => ({
             dish_id: i.dish_id,
             available: i.available,
+            chef_special: i.chef_special,
+            todays_special: i.todays_special,
+            must_try: i.must_try,
           })),
         }),
       });
@@ -199,7 +235,7 @@ export function MenuView({ hotelId, reloadToken }: Props) {
       assertBodyOk(data, "Could not save menu");
       const updated = Array.isArray(data.updated) ? data.updated.length : 0;
       const failed = Array.isArray(data.failed) ? data.failed.length : 0;
-      setBaseline(snapshotAvailable(items));
+      setBaseline(snapshotMenuState(items));
       setSaveOk(
         failed > 0
           ? `Saved: ${updated} updated, ${failed} failed.`
@@ -219,7 +255,9 @@ export function MenuView({ hotelId, reloadToken }: Props) {
       <div className="menu-view-head">
         <div>
           <h2 className="menu-view-title">Menu</h2>
-          <p className="menu-view-sub">Toggle availability and save when you are done.</p>
+          <p className="menu-view-sub">
+            Toggle availability and spotlight flags (Chef&apos;s, Today&apos;s, Must try), then save.
+          </p>
         </div>
         <button
           type="button"
@@ -265,6 +303,7 @@ export function MenuView({ hotelId, reloadToken }: Props) {
                 <th scope="col">Price</th>
                 <th scope="col">Photo</th>
                 <th scope="col">Available</th>
+                <th scope="col">Spotlights</th>
               </tr>
             </thead>
             <tbody>
@@ -304,6 +343,21 @@ export function MenuView({ hotelId, reloadToken }: Props) {
                         {row.available ? "Available" : "Unavailable"} — {row.name}
                       </span>
                     </label>
+                  </td>
+                  <td className="menu-col-spotlights">
+                    <div className="menu-spotlight-toggles">
+                      {(Object.keys(SPOTLIGHT_LABELS) as SpotlightKey[]).map((key) => (
+                        <label key={key} className="menu-spotlight-toggle">
+                          <input
+                            type="checkbox"
+                            checked={row[key]}
+                            onChange={(e) => setSpotlight(row.dish_id, key, e.target.checked)}
+                          />
+                          <span className="menu-toggle-ui" aria-hidden />
+                          <span className="menu-spotlight-label">{SPOTLIGHT_LABELS[key]}</span>
+                        </label>
+                      ))}
+                    </div>
                   </td>
                 </tr>
               ))}

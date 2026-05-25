@@ -178,6 +178,54 @@
   width: 8.5rem;
 }
 
+.menu-col-spotlights {
+  min-width: 11rem;
+}
+
+.menu-spotlight-toggles {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+}
+
+.menu-spotlight-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+  position: relative;
+}
+
+.menu-spotlight-toggle input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.menu-spotlight-label {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: var(--muted);
+  min-width: 3.25rem;
+}
+
+.menu-spotlight-toggle .menu-toggle-ui {
+  width: 2.25rem;
+  height: 1.25rem;
+}
+
+.menu-spotlight-toggle .menu-toggle-ui::after {
+  width: 1rem;
+  height: 1rem;
+  top: 0.125rem;
+  left: 0.125rem;
+}
+
+.menu-spotlight-toggle input:checked + .menu-toggle-ui::after {
+  transform: translateX(1rem);
+}
+
 .menu-toggle {
   display: inline-flex;
   align-items: center;
@@ -298,5 +346,19 @@
     color: var(--muted);
     font-size: 0.8rem;
     font-weight: 600;
+  }
+
+  .menu-col-spotlights {
+    width: 100%;
+    padding-top: 0.75rem !important;
+  }
+
+  .menu-col-spotlights::before {
+    content: "Spotlights";
+    display: block;
+    color: var(--muted);
+    font-size: 0.8rem;
+    font-weight: 600;
+    margin-bottom: 0.35rem;
   }
 }

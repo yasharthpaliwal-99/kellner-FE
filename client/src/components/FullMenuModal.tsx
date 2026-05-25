@@ -5,14 +5,6 @@ import { formatAmount } from "../lib/formatAmount";
 import { getAuthSession } from "../lib/authSession";
 import "./FullMenuModal.css";
 
-/* ───────────────────────── helpers ───────────────────────── */
-
-/**
- * Mirror of `MenuView.normalizeRow` (kitchen side), with two extra optional
- * fields surfaced for the guest UI — `description` and `section`/`category`.
- * Same `fetch_menu` payload, so any extras the backend already returns flow
- * through transparently; missing fields just stay null.
- */
 function normalizeRow(row: unknown): KitchenMenuItem | null {
   if (!row || typeof row !== "object") return null;
   const r = row as Record<string, unknown>;
@@ -28,21 +20,21 @@ function normalizeRow(row: unknown): KitchenMenuItem | null {
   }
 
   const available = Boolean(r.available);
+  const chef_special = Boolean(r.chef_special);
+  const todays_special = Boolean(r.todays_special);
+  const must_try = Boolean(r.must_try);
 
   const rawImg = r.image;
   const image = typeof rawImg === "string" && rawImg.trim() ? rawImg.trim() : null;
 
-  // Backend may use any of these; pick the first non-empty string.
-  const descCandidates = [r.description, r.desc, r.info];
-  let description: string | null = null;
-  for (const c of descCandidates) {
-    if (typeof c === "string" && c.trim()) {
-      description = c.trim();
-      break;
-    }
-  }
-
-  const sectionCandidates = [r.section, r.category, r.group];
+  const sectionCandidates = [
+    r.section,
+    r.category,
+    r.group,
+    r.menu_section,
+    r.category_name,
+    r.section_name,
+  ];
   let section: string | null = null;
   for (const c of sectionCandidates) {
     if (typeof c === "string" && c.trim()) {
@@ -56,8 +48,10 @@ function normalizeRow(row: unknown): KitchenMenuItem | null {
     name,
     price,
     available,
+    chef_special,
+    todays_special,
+    must_try,
     ...(image ? { image } : {}),
-    ...(description ? { description } : {}),
     ...(section ? { section } : {}),
   };
 }
@@ -69,7 +63,37 @@ function parseFetchMenuItems(data: unknown): KitchenMenuItem[] {
   return raw.map(normalizeRow).filter((x): x is KitchenMenuItem => x !== null);
 }
 
-/* ───────────────────────── card ───────────────────────── */
+/** Section tabs from API list and/or per-item fields (preserves API order when provided). */
+function parseSectionLabels(data: unknown, items: KitchenMenuItem[]): string[] {
+  const ordered: string[] = [];
+  const seen = new Set<string>();
+  const add = (label: string) => {
+    const s = label.trim();
+    if (!s || seen.has(s)) return;
+    seen.add(s);
+    ordered.push(s);
+  };
+
+  if (data && typeof data === "object") {
+    const o = data as Record<string, unknown>;
+    const raw = o.sections ?? o.categories ?? o.menu_sections;
+    if (Array.isArray(raw)) {
+      for (const entry of raw) {
+        if (typeof entry === "string") add(entry);
+        else if (entry && typeof entry === "object") {
+          const name = (entry as Record<string, unknown>).name ?? (entry as Record<string, unknown>).title;
+          if (typeof name === "string") add(name);
+        }
+      }
+    }
+  }
+
+  for (const it of items) {
+    if (it.section) add(it.section);
+  }
+
+  return ordered;
+}
 
 type MenuCardProps = { item: KitchenMenuItem };
 
@@ -95,26 +119,14 @@ function MenuItemCard({ item }: MenuCardProps) {
             <span className="fm-card-placeholder-glyph" />
           </div>
         )}
-        {!item.available && (
-          <span className="fm-card-unavailable-badge" aria-label="Unavailable">
-            Unavailable
-          </span>
-        )}
       </div>
       <div className="fm-card-body">
-        <header className="fm-card-head">
-          <p className="fm-card-name">{item.name}</p>
-          <p className="fm-card-price">{formatAmount(item.price)}</p>
-        </header>
-        {item.description ? (
-          <p className="fm-card-desc">{item.description}</p>
-        ) : null}
+        <p className="fm-card-name">{item.name}</p>
+        <p className="fm-card-price">{formatAmount(item.price)}</p>
       </div>
     </article>
   );
 }
-
-/* ───────────────────────── modal ───────────────────────── */
 
 const ALL_SECTIONS = "__all__";
 
@@ -127,23 +139,21 @@ type FetchState = "idle" | "loading" | "error";
 
 export function FullMenuModal({ open, onClose }: Props) {
   const [items, setItems] = useState<KitchenMenuItem[]>([]);
+  const [sectionLabels, setSectionLabels] = useState<string[]>([]);
   const [fetchState, setFetchState] = useState<FetchState>("idle");
-  const [search, setSearch] = useState("");
   const [activeSection, setActiveSection] = useState<string>(ALL_SECTIONS);
   const dialogRef = useRef<HTMLDialogElement>(null);
 
-  // open / close native dialog
   useEffect(() => {
     const el = dialogRef.current;
     if (!el) return;
     if (open) {
       if (!el.open) el.showModal();
-    } else {
-      if (el.open) el.close();
+    } else if (el.open) {
+      el.close();
     }
   }, [open]);
 
-  // close on ESC (native dialog fires "close")
   useEffect(() => {
     const el = dialogRef.current;
     if (!el) return;
@@ -152,7 +162,6 @@ export function FullMenuModal({ open, onClose }: Props) {
     return () => el.removeEventListener("close", handler);
   }, [onClose]);
 
-  // fetch menu when opened (same shape as kitchen MenuView)
   useEffect(() => {
     if (!open) return;
     setFetchState("loading");
@@ -163,10 +172,6 @@ export function FullMenuModal({ open, onClose }: Props) {
       setFetchState("error");
       return;
     }
-    // NOTE: guest reads the menu anonymously — `hotel_id` in body is enough.
-    // We deliberately do NOT send `x-device-session` here: the kitchen endpoint
-    // rejects device sessions with 401, and we don't need auth to surface the
-    // public menu to a diner.
     fetch(apiUrl("/api/kitchen/fetch_menu"), {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -177,50 +182,31 @@ export function FullMenuModal({ open, onClose }: Props) {
         return res.json();
       })
       .then((data: unknown) => {
-        setItems(parseFetchMenuItems(data));
+        const nextItems = parseFetchMenuItems(data);
+        setItems(nextItems);
+        setSectionLabels(parseSectionLabels(data, nextItems));
         setFetchState("idle");
-        // reset filters when a fresh menu loads
         setActiveSection(ALL_SECTIONS);
-        setSearch("");
       })
       .catch(() => setFetchState("error"));
   }, [open]);
 
-  // close on backdrop click
   const handleBackdropClick = (e: React.MouseEvent<HTMLDialogElement>) => {
     if (e.target === dialogRef.current) onClose();
   };
 
-  /** Unique section names preserved in first-seen order. */
-  const sections = useMemo(() => {
-    const seen: string[] = [];
-    const set = new Set<string>();
-    for (const it of items) {
-      const s = it.section?.trim();
-      if (s && !set.has(s)) {
-        set.add(s);
-        seen.push(s);
-      }
-    }
-    return seen;
-  }, [items]);
+  const sections = sectionLabels;
 
   const filteredItems = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return items.filter((it) => {
-      if (activeSection !== ALL_SECTIONS) {
-        if ((it.section ?? "") !== activeSection) return false;
-      }
-      if (q) {
-        const hay = `${it.name} ${it.description ?? ""}`.toLowerCase();
-        if (!hay.includes(q)) return false;
-      }
-      return true;
-    });
-  }, [items, search, activeSection]);
+    if (activeSection === ALL_SECTIONS) return items;
+    return items.filter((it) => (it.section ?? "") === activeSection);
+  }, [items, activeSection]);
 
-  const availableItems = filteredItems.filter((it) => it.available);
-  const unavailableItems = filteredItems.filter((it) => !it.available);
+  const sortedItems = useMemo(() => {
+    const available = filteredItems.filter((it) => it.available);
+    const unavailable = filteredItems.filter((it) => !it.available);
+    return [...available, ...unavailable];
+  }, [filteredItems]);
 
   return (
     <dialog
@@ -232,47 +218,35 @@ export function FullMenuModal({ open, onClose }: Props) {
       <div className="fm-sheet">
         <header className="fm-header">
           <h2 className="fm-title">Menu</h2>
-          <div className="fm-header-tools">
-            <input
-              className="fm-search"
-              type="search"
-              placeholder="Search…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              aria-label="Search menu"
-            />
-            <button
-              className="fm-close-btn"
-              aria-label="Close menu"
-              onClick={onClose}
-              type="button"
-            >
-              <span aria-hidden>✕</span>
-            </button>
-          </div>
+          <button
+            className="fm-close-btn"
+            aria-label="Close menu"
+            onClick={onClose}
+            type="button"
+          >
+            <span aria-hidden>✕</span>
+          </button>
         </header>
 
-        {sections.length > 0 ? (
-          <nav className="fm-filterbar" aria-label="Menu sections">
+        <nav className="fm-filterbar" aria-label="Menu sections">
+          <button
+            type="button"
+            className={`fm-chip${activeSection === ALL_SECTIONS ? " is-active" : ""}`}
+            onClick={() => setActiveSection(ALL_SECTIONS)}
+          >
+            All
+          </button>
+          {sections.map((s) => (
             <button
+              key={s}
               type="button"
-              className={`fm-chip${activeSection === ALL_SECTIONS ? " is-active" : ""}`}
-              onClick={() => setActiveSection(ALL_SECTIONS)}
+              className={`fm-chip${activeSection === s ? " is-active" : ""}`}
+              onClick={() => setActiveSection(s)}
             >
-              All
+              {s}
             </button>
-            {sections.map((s) => (
-              <button
-                key={s}
-                type="button"
-                className={`fm-chip${activeSection === s ? " is-active" : ""}`}
-                onClick={() => setActiveSection(s)}
-              >
-                {s}
-              </button>
-            ))}
-          </nav>
-        ) : null}
+          ))}
+        </nav>
 
         <div className="fm-body">
           {fetchState === "loading" && (
@@ -290,35 +264,22 @@ export function FullMenuModal({ open, onClose }: Props) {
             </div>
           )}
 
-          {fetchState === "idle" && filteredItems.length === 0 && (
+          {fetchState === "idle" && sortedItems.length === 0 && (
             <div className="fm-state-wrap" aria-live="polite">
               <p className="fm-state-text">
-                {search.trim() || activeSection !== ALL_SECTIONS
-                  ? "No dishes match your filters."
+                {activeSection !== ALL_SECTIONS
+                  ? "No dishes in this category."
                   : "No items on the menu yet."}
               </p>
             </div>
           )}
 
-          {fetchState === "idle" && availableItems.length > 0 && (
-            <section>
-              <div className="fm-grid">
-                {availableItems.map((item) => (
-                  <MenuItemCard key={item.dish_id} item={item} />
-                ))}
-              </div>
-            </section>
-          )}
-
-          {fetchState === "idle" && unavailableItems.length > 0 && (
-            <section className="fm-unavailable-section">
-              <h3 className="fm-section-label">Currently unavailable</h3>
-              <div className="fm-grid">
-                {unavailableItems.map((item) => (
-                  <MenuItemCard key={item.dish_id} item={item} />
-                ))}
-              </div>
-            </section>
+          {fetchState === "idle" && sortedItems.length > 0 && (
+            <div className="fm-grid">
+              {sortedItems.map((item) => (
+                <MenuItemCard key={item.dish_id} item={item} />
+              ))}
+            </div>
           )}
         </div>
       </div>

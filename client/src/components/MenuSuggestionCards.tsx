@@ -3,7 +3,8 @@ import { formatAmount } from "../lib/formatAmount";
 import type { MenuSuggestion } from "../types";
 import "./MenuSuggestionCards.css";
 
-const SLOT_COUNT = 4;
+/** Max recommendation cards shown (3×3 grid in INFO BOARD). */
+export const RECOMMENDATION_SLOT_COUNT = 9;
 
 type Props = {
   items: MenuSuggestion[];
@@ -18,11 +19,15 @@ function SuggestionCard({ item }: { item: MenuSuggestion }) {
   const info = item.info?.trim();
 
   return (
-    <article className="menu-suggestion-card has-item" role="listitem">
-      <div className="menu-card-media">
+    <article
+      className="menu-suggestion-card has-item"
+      role="listitem"
+      title={info || undefined}
+    >
+      <div className="menu-suggestion-card-media">
         {showPhoto ? (
           <img
-            className="menu-card-image"
+            className="menu-suggestion-card-img"
             src={url}
             alt=""
             loading="lazy"
@@ -30,42 +35,33 @@ function SuggestionCard({ item }: { item: MenuSuggestion }) {
             onError={() => setImgFailed(true)}
           />
         ) : (
-          <div className="menu-card-media-placeholder" aria-hidden>
-            <span className="menu-card-placeholder-glyph" />
-          </div>
+          <div className="menu-suggestion-card-placeholder" aria-hidden />
         )}
       </div>
-
-      <div className="menu-card-body">
-        <header className="menu-card-head">
-          <h3 className="menu-card-name">{item.name}</h3>
-          <span className="menu-card-price">{formatAmount(item.price)}</span>
-        </header>
-        {info ? <p className="menu-card-info">{info}</p> : null}
+      <div className="menu-suggestion-card-body">
+        <div className="menu-suggestion-card-head">
+          <h3 className="menu-suggestion-card-name">{item.name}</h3>
+          <span className="menu-suggestion-card-price">{formatAmount(item.price)}</span>
+        </div>
       </div>
     </article>
   );
 }
 
 export function MenuSuggestionCards({ items, loading, emptyMessage }: Props) {
-  const visibleItems = items.slice(0, SLOT_COUNT);
+  const visibleItems = items.slice(0, RECOMMENDATION_SLOT_COUNT);
 
   if (loading) {
     return (
-      <div className="menu-suggestion-cards" role="list">
-        <article className="menu-suggestion-card is-empty is-thinking" role="listitem">
-          <div className="menu-thinking-wrap" aria-live="polite">
-            <div className="menu-thinking-head">
-              <span className="menu-thinking-dot" aria-hidden />
-              <p className="menu-card-loading">Thinking about your best options…</p>
-            </div>
-            <div className="menu-thinking-lines" aria-hidden>
-              <span className="menu-thinking-line menu-thinking-line--lg" />
-              <span className="menu-thinking-line menu-thinking-line--md" />
-              <span className="menu-thinking-line menu-thinking-line--sm" />
-            </div>
-          </div>
-        </article>
+      <div className="menu-suggestion-cards menu-suggestion-cards--loading" role="list">
+        <p className="menu-suggestion-cards-loading-label" aria-live="polite">
+          Thinking about your best options…
+        </p>
+        <div className="menu-suggestion-cards-grid" aria-hidden>
+          {Array.from({ length: 3 }, (_, i) => (
+            <div key={i} className="menu-suggestion-card menu-suggestion-card--skeleton" />
+          ))}
+        </div>
       </div>
     );
   }
@@ -74,7 +70,7 @@ export function MenuSuggestionCards({ items, loading, emptyMessage }: Props) {
     return (
       <div className="menu-suggestion-cards" role="status" aria-live="polite">
         <article className="menu-suggestion-card is-empty">
-          <p className="menu-card-empty-state">
+          <p className="menu-suggestion-card-empty">
             {emptyMessage ?? "No suggestions right now."}
           </p>
         </article>
@@ -84,9 +80,11 @@ export function MenuSuggestionCards({ items, loading, emptyMessage }: Props) {
 
   return (
     <div className="menu-suggestion-cards" role="list">
-      {visibleItems.map((item, index) => (
-        <SuggestionCard key={`${item.dish_id}-${item.name}-${index}`} item={item} />
-      ))}
+      <div className="menu-suggestion-cards-grid">
+        {visibleItems.map((item, index) => (
+          <SuggestionCard key={`${item.dish_id}-${item.name}-${index}`} item={item} />
+        ))}
+      </div>
     </div>
   );
 }

@@ -113,13 +113,17 @@
   display: flex;
   flex-direction: column;
   width: 100%;
-  max-width: 22rem;
+  /* ~3 spotlight cards per row (7.5rem × 3 + gaps) */
+  max-width: min(100%, 26.5rem);
   min-height: 0;
   max-height: calc(100dvh - 5rem);
 }
 
 @media (min-width: 900px) {
   .guest-suggestions {
+    flex: 0 0 26.5rem;
+    width: 26.5rem;
+    max-width: 26.5rem;
     flex-shrink: 0;
     align-self: flex-start;
     position: sticky;
@@ -166,6 +170,16 @@
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--muted);
+}
+
+.guest-suggestions-panel .guest-spotlights--info-board {
+  flex-shrink: 0;
+}
+
+.guest-suggestions-panel .guest-spotlights--info-board + .menu-suggestion-cards {
+  margin-top: 0.15rem;
+  padding-top: 0.55rem;
+  border-top: 1px solid rgba(0, 0, 0, 0.07);
 }
 
 .guest-order-pairing {

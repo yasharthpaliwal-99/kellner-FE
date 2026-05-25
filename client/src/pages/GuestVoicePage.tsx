@@ -3,6 +3,7 @@ import { useLocation } from "react-router-dom";
 import type { MenuSuggestion, OrderSuggestionsPayload } from "../types";
 import { VoiceOrb } from "../components/VoiceOrb";
 import { MenuSuggestionCards } from "../components/MenuSuggestionCards";
+import { GuestSpotlightRails } from "../components/GuestSpotlightRails";
 import { KellnerVoicePanel } from "../components/KellnerVoicePanel";
 import { FullMenuModal } from "../components/FullMenuModal";
 import { DishSpiceSlider } from "../components/DishSpiceSlider";
@@ -72,6 +73,7 @@ export default function GuestVoicePage() {
   const hintTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const tableCtx = tableContextFromSession();
+  const spotlightHotelId = tableCtx?.hotel_id ?? NaN;
 
   const showActionHint = useCallback((message: string, tone: "error" | "success" = "error", ms = 3200) => {
     if (hintTimerRef.current) clearTimeout(hintTimerRef.current);
@@ -161,6 +163,14 @@ export default function GuestVoicePage() {
   const showBillCard = replyMode === "bill" && (billItems.length > 0 || billTotal != null);
   const showOrderPairing = Boolean(orderPairing?.items.length);
   const showMenuRecommendations = !showOrderCard && !showBillCard;
+  const showVoiceRecommendations =
+    showMenuRecommendations && (recommendationsLoading || suggestions.length > 0);
+  /** Spotlights only on idle INFO BOARD — hide once the guest asks / recommendations flow starts. */
+  const showSpotlightRails =
+    showMenuRecommendations &&
+    Number.isFinite(spotlightHotelId) &&
+    !showVoiceRecommendations &&
+    !showOrderPairing;
 
   const orderFingerprint = useMemo(() => {
     if (replyMode !== "order_confirmation") return "";
@@ -335,7 +345,10 @@ export default function GuestVoicePage() {
             onOrderSuggestions={(event) => {
               setOrderPairing(event.payload);
             }}
-            onUserTranscript={() => setOrderPairing(null)}
+            onUserTranscript={() => {
+              setOrderPairing(null);
+              setSuggestions([]);
+            }}
             onVoiceActiveChange={setMicLive}
             onPhaseLabelChange={setPhaseLabel}
             onAudioBands={setAudioBands}
@@ -441,11 +454,27 @@ export default function GuestVoicePage() {
               </footer>
             </article>
           ) : showMenuRecommendations ? (
-            <MenuSuggestionCards
-              items={suggestions}
-              loading={recommendationsLoading}
-              emptyMessage={emptySuggestionMessage}
-            />
+            <>
+              {showSpotlightRails ? (
+                <GuestSpotlightRails
+                  hotelId={spotlightHotelId}
+                  variant="info-board"
+                />
+              ) : null}
+              {showVoiceRecommendations ? (
+                <MenuSuggestionCards
+                  items={suggestions}
+                  loading={recommendationsLoading}
+                  emptyMessage={emptySuggestionMessage}
+                />
+              ) : !showSpotlightRails ? (
+                <MenuSuggestionCards
+                  items={[]}
+                  loading={false}
+                  emptyMessage={emptySuggestionMessage}
+                />
+              ) : null}
+            </>
           ) : null}
           {showOrderPairing && orderPairing ? (
             <section
